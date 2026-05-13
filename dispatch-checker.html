@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Dispatch Checker — Raymiyo Trading</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3248;
+    --accent: #4f7cff;
+    --green: #00d084;
+    --red: #ff4f4f;
+    --yellow: #ffc043;
+    --text: #e8eaf6;
+    --muted: #6b7194;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding-bottom: 120px;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .truck-icon {
+    font-size: 22px;
+    line-height: 1;
+  }
+  .header h1 {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.5px;
+  }
+  .so-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--accent);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: auto;
+  }
+  .header-sub {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  /* ── Progress bar ── */
+  .progress-wrap {
+    padding: 12px 20px 0;
+  }
+  .progress-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .progress-label {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  .progress-count {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--green);
+    font-weight: 600;
+  }
+  .progress-bar-bg {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+    width: 0%;
+  }
+
+  /* ── Product list ── */
+  .list {
+    padding: 14px 16px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .item-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 14px 12px;
+    transition: border-color 0.3s, background 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .item-card.done {
+    border-color: var(--green);
+    background: #0d1f18;
+  }
+  .item-card.over {
+    border-color: var(--red);
+    background: #1f0d0d;
+  }
+  .item-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--border);
+    transition: background 0.3s;
+  }
+  .item-card.done::before { background: var(--green); }
+  .item-card.over::before { background: var(--red); }
+
+  .item-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+    padding-right: 40px;
+    line-height: 1.3;
+  }
+  .item-meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .foc-tag {
+    display: inline-block;
+    background: #2a2200;
+    color: var(--yellow);
+    border: 1px solid #4a3e00;
+    font-size: 9px;
+    font-family: var(--mono);
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  .done-badge {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    font-size: 18px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .item-card.done .done-badge { opacity: 1; }
+
+  /* Counter row */
+  .counter-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+  .counter-btn {
+    width: 42px;
+    height: 42px;
+    border: none;
+    border-radius: 8px;
+    font-size: 20px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s, opacity 0.2s;
+    user-select: none;
+    -webkit-user-select: none;
+    flex-shrink: 0;
+  }
+  .counter-btn:active { transform: scale(0.9); }
+  .btn-minus {
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-minus:disabled { opacity: 0.3; }
+  .btn-plus {
+    background: var(--accent);
+    color: white;
+  }
+  .item-card.done .btn-plus {
+    background: var(--green);
+  }
+  .item-card.over .btn-plus {
+    background: var(--red);
+  }
+
+  .counter-display {
+    flex: 1;
+    text-align: center;
+    font-family: var(--mono);
+  }
+  .loaded-num {
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--text);
+    transition: color 0.3s;
+  }
+  .item-card.done .loaded-num { color: var(--green); }
+  .item-card.over .loaded-num { color: var(--red); }
+  .loaded-label {
+    font-size: 9px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+
+  .required-display {
+    text-align: right;
+    font-family: var(--mono);
+    flex-shrink: 0;
+    width: 56px;
+  }
+  .required-num {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  .required-label {
+    font-size: 9px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+
+  /* ── Footer confirm button ── */
+  .footer {
+    position: fixed;
+    bottom: 0;
+    left: 0; right: 0;
+    background: linear-gradient(to top, var(--bg) 70%, transparent);
+    padding: 20px 16px 24px;
+    z-index: 100;
+  }
+  .confirm-btn {
+    width: 100%;
+    height: 54px;
+    border: none;
+    border-radius: 12px;
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s;
+    letter-spacing: 0.3px;
+  }
+  .confirm-btn:disabled {
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: not-allowed;
+    border: 1px solid var(--border);
+  }
+  .confirm-btn.ready {
+    background: var(--green);
+    color: #001a0f;
+    box-shadow: 0 0 24px rgba(0,208,132,0.35);
+  }
+  .confirm-btn.ready:active { transform: scale(0.98); }
+
+  /* ── Done overlay ── */
+  .done-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+    padding: 32px;
+  }
+  .done-overlay.show { display: flex; }
+  .done-overlay .big-check { font-size: 64px; margin-bottom: 16px; }
+  .done-overlay h2 {
+    font-family: var(--mono);
+    font-size: 20px;
+    color: var(--green);
+    margin-bottom: 8px;
+  }
+  .done-overlay p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .done-overlay .posting-label {
+    margin-top: 20px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+  }
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Loading state ── */
+  #loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    gap: 16px;
+  }
+  #loading .spinner { width: 24px; height: 24px; border-width: 3px; }
+  #loading p { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+  #error-state {
+    display: none;
+    padding: 40px 24px;
+    text-align: center;
+  }
+  #error-state h2 { color: var(--red); font-size: 16px; margin-bottom: 8px; }
+  #error-state p { font-size: 12px; color: var(--muted); line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<!-- Header (populated by JS) -->
+<div class="header" id="header" style="display:none">
+  <div class="header-top">
+    <span class="truck-icon">🚛</span>
+    <h1 id="hdr-account">Loading...</h1>
+    <span class="so-badge" id="hdr-so">SO-???</span>
+  </div>
+  <div class="header-sub" id="hdr-sub">Loading order details...</div>
+</div>
+
+<!-- Progress -->
+<div class="progress-wrap" id="progress-wrap" style="display:none">
+  <div class="progress-row">
+    <span class="progress-label">DISPATCH PROGRESS</span>
+    <span class="progress-count" id="progress-count">0 / 0 confirmed</span>
+  </div>
+  <div class="progress-bar-bg">
+    <div class="progress-bar-fill" id="progress-fill"></div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Loading order...</p>
+</div>
+
+<!-- Error -->
+<div id="error-state">
+  <h2>⚠️ Could not load order</h2>
+  <p id="error-msg">No Sales Order data found in the URL.<br>Please use the link sent by the system.</p>
+</div>
+
+<!-- Product list -->
+<div class="list" id="product-list" style="display:none"></div>
+
+<!-- Footer -->
+<div class="footer" id="footer" style="display:none">
+  <button class="confirm-btn" id="confirm-btn" disabled>
+    ⬜ Tick all products to confirm dispatch
+  </button>
+</div>
+
+<!-- Done overlay -->
+<div class="done-overlay" id="done-overlay">
+  <div class="big-check">✅</div>
+  <h2>Dispatch Confirmed!</h2>
+  <p id="done-summary"></p>
+  <div class="posting-label" id="posting-label">
+    <span class="spinner"></span> Posting summary to Cliq...
+  </div>
+</div>
+
+<script>
+// ── Parse URL params ──────────────────────────────────────────────
+function getParams() {
+  const p = new URLSearchParams(window.location.search);
+  return {
+    soNumber:    p.get('so')       || '',
+    accountName: p.get('account')  || '',
+    channel:     p.get('channel')  || '',
+    items:       p.get('items')    || '',   // base64 encoded JSON
+    webhook:     p.get('webhook')  || ''    // Cliq incoming webhook URL
+  };
+}
+
+// ── State ──────────────────────────────────────────────────────────
+let products = [];   // [{name, required, isFoc}, ...]
+let counts   = [];   // parallel array of loaded counts
+
+// ── Boot ──────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const params = getParams();
+
+  try {
+    const decoded = atob(params.items);
+    products = JSON.parse(decoded);
+  } catch(e) {
+    showError('Could not read product data from the link.<br>Please use the link sent by the system.');
+    return;
+  }
+
+  if (!products || products.length === 0) {
+    showError('No products found in this Sales Order.');
+    return;
+  }
+
+  counts = products.map(() => 0);
+
+  // Populate header
+  document.getElementById('hdr-account').textContent = params.accountName || 'Unknown Account';
+  document.getElementById('hdr-so').textContent      = params.soNumber    || 'SO-???';
+  document.getElementById('hdr-sub').textContent     = `${products.length} product line${products.length > 1 ? 's' : ''} · Tap + as each carton loads`;
+
+  // Hide loading, show UI
+  document.getElementById('loading').style.display       = 'none';
+  document.getElementById('header').style.display        = '';
+  document.getElementById('progress-wrap').style.display = '';
+  document.getElementById('product-list').style.display  = '';
+  document.getElementById('footer').style.display        = '';
+
+  renderProducts();
+  updateProgress();
+});
+
+// ── Render product cards ──────────────────────────────────────────
+function renderProducts() {
+  const list = document.getElementById('product-list');
+  list.innerHTML = '';
+
+  products.forEach((p, i) => {
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    card.id = `card-${i}`;
+
+    const focTag = p.isFoc ? '<span class="foc-tag">FREE OF COST</span>' : '';
+
+    card.innerHTML = `
+      <div class="done-badge">✅</div>
+      <div class="item-name">${p.name}${focTag}</div>
+      <div class="item-meta">Required: <strong>${p.required} CTN</strong> &nbsp;·&nbsp; ${p.bagsPerCtn || '—'} bags/ctn</div>
+      <div class="counter-row">
+        <button class="counter-btn btn-minus" id="minus-${i}" onclick="adjust(${i}, -1)" disabled>−</button>
+        <div class="counter-display">
+          <div class="loaded-num" id="num-${i}">0</div>
+          <div class="loaded-label">LOADED</div>
+        </div>
+        <div class="required-display">
+          <div class="required-num">${p.required}</div>
+          <div class="required-label">REQUIRED</div>
+        </div>
+        <button class="counter-btn btn-plus" id="plus-${i}" onclick="adjust(${i}, +1)">+</button>
+      </div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+// ── Adjust counter ────────────────────────────────────────────────
+function adjust(i, delta) {
+  const newVal = counts[i] + delta;
+  if (newVal < 0) return;
+  counts[i] = newVal;
+
+  const numEl   = document.getElementById(`num-${i}`);
+  const minusEl = document.getElementById(`minus-${i}`);
+  const card    = document.getElementById(`card-${i}`);
+
+  numEl.textContent = newVal;
+  minusEl.disabled  = newVal === 0;
+
+  const required = products[i].required;
+  card.classList.remove('done', 'over');
+  if (newVal === required) card.classList.add('done');
+  if (newVal >  required) card.classList.add('over');
+
+  updateProgress();
+}
+
+// ── Progress ──────────────────────────────────────────────────────
+function updateProgress() {
+  const total    = products.length;
+  const confirmed = counts.filter((c, i) => c === products[i].required).length;
+  const allDone  = confirmed === total;
+
+  document.getElementById('progress-count').textContent = `${confirmed} / ${total} confirmed`;
+  document.getElementById('progress-fill').style.width  = `${(confirmed / total) * 100}%`;
+
+  const btn = document.getElementById('confirm-btn');
+  btn.disabled = !allDone;
+  if (allDone) {
+    btn.classList.add('ready');
+    btn.textContent = '🚛 Confirm Full Dispatch';
+    btn.onclick = confirmDispatch;
+  } else {
+    btn.classList.remove('ready');
+    btn.textContent = `⬜ ${total - confirmed} product${total - confirmed !== 1 ? 's' : ''} remaining`;
+    btn.onclick = null;
+  }
+}
+
+// ── Confirm dispatch ──────────────────────────────────────────────
+function confirmDispatch() {
+  const params  = getParams();
+  const overlay = document.getElementById('done-overlay');
+  overlay.classList.add('show');
+
+  const now = new Date().toLocaleString('en-US', {
+    day:    '2-digit',
+    month:  'short',
+    year:   'numeric',
+    hour:   '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  const summaryLines = products.map((p, i) =>
+    `✅ ${p.name} — ${counts[i]} CTN`
+  ).join('\n');
+
+  document.getElementById('done-summary').textContent =
+    `${params.soNumber} · ${params.accountName}\n${now}`;
+
+  // Build Cliq message
+  const cliqMsg =
+    `🚛 *Dispatch Confirmed — ${params.soNumber}*\n` +
+    `🏪 ${params.accountName}\n` +
+    `🕐 ${now}\n\n` +
+    `*Carton Summary:*\n${summaryLines}\n\n` +
+    `✅ All ${products.length} product lines loaded & confirmed.`;
+
+  // Post to Cliq via webhook
+  if (params.webhook) {
+    const webhookUrl = atob(params.webhook);
+    fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: cliqMsg })
+    })
+    .then(() => {
+      document.getElementById('posting-label').innerHTML = '✅ Summary posted to Cliq!';
+    })
+    .catch(() => {
+      document.getElementById('posting-label').innerHTML = '⚠️ Could not post to Cliq — save screenshot';
+    });
+  } else {
+    document.getElementById('posting-label').innerHTML = '(No webhook configured)';
+  }
+}
+
+// ── Error ─────────────────────────────────────────────────────────
+function showError(msg) {
+  document.getElementById('loading').style.display    = 'none';
+  document.getElementById('error-state').style.display = '';
+  document.getElementById('error-msg').innerHTML       = msg;
+}
+</script>
+</body>
+</html>
