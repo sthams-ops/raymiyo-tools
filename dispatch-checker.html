@@ -124,7 +124,7 @@
 </div>
 
 <script>
-const API_URL = 'https://www.zohoapis.com/crm/v7/functions/getdispatchdata/actions/execute?auth_type=apikey&zapikey=1003.6c59aa591f000cc4ea59d69815d975bc.f0eaba07efbf31624f0408d5f38b2920';
+const API_URL = '/api/dispatch?';
 const CLIQ_WEBHOOK_BASE = 'https://cliq.zoho.com/api/v2/channelsbyname/';
 const CLIQ_WEBHOOK_TOKEN = '1001.ac5469e61cc9730676db8ee72a55d41f.acce5676f22e97813ad570d44816645d';
 
@@ -142,7 +142,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   try {
-    const response = await fetch(`${API_URL}&soNumber=${encodeURIComponent(soNumber)}`);
+    const response = await fetch(`${API_URL}so=${encodeURIComponent(soNumber)}`);
     const wrapper = await response.json();
 
     let dataStr = null;
