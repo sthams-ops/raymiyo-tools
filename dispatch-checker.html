@@ -284,10 +284,13 @@ function confirmDispatch() {
     `✅ All ${products.length} product lines loaded & confirmed.`;
   const targetChannel = orderInfo.channel || 'crmalert';
   const webhookUrl = `${CLIQ_WEBHOOK_BASE}${targetChannel}/message?zapikey=${CLIQ_WEBHOOK_TOKEN}`;
-  fetch(webhookUrl, {
+ fetch('/api/dispatch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: cliqMsg })
+    body: JSON.stringify({
+      channel: orderInfo.channel || 'crmalert',
+      message: cliqMsg
+    })
   })
   .then(res => res.json())
   .then(() => {
@@ -296,7 +299,6 @@ function confirmDispatch() {
   .catch(() => {
     document.getElementById('posting-label').innerHTML = '⚠️ Could not post to Cliq — please screenshot this page.';
   });
-}
 
 function showError(msg) {
   document.getElementById('loading').style.display     = 'none';
