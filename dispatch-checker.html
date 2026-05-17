@@ -4,75 +4,496 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Dispatch Checker — Raymiyo Trading</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a; --border: #2e3248;
-    --accent: #4f7cff; --green: #00d084; --red: #ff4f4f; --yellow: #ffc043;
-    --text: #e8eaf6; --muted: #6b7194;
-    --mono: 'IBM Plex Mono', monospace; --sans: 'IBM Plex Sans', sans-serif;
+    --bg: #0a0d14;
+    --bg-grad: linear-gradient(180deg, #0a0d14 0%, #0f131c 100%);
+    --surface: #161a26;
+    --surface-hover: #1c2030;
+    --surface-elevated: #1f2435;
+    --border: #2a2f44;
+    --border-light: #353b54;
+    --accent: #5b8eff;
+    --accent-glow: rgba(91, 142, 255, 0.4);
+    --green: #00e09c;
+    --green-glow: rgba(0, 224, 156, 0.35);
+    --green-bg: #0d2419;
+    --red: #ff5b6e;
+    --red-bg: #2a0d12;
+    --yellow: #ffc857;
+    --yellow-bg: #2a2200;
+    --text: #f0f2f8;
+    --muted: #7a83a3;
+    --muted-dim: #4f5675;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; padding-bottom: 120px; }
-  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 20px 14px; position: sticky; top: 0; z-index: 100; }
-  .header-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-  .truck-icon { font-size: 22px; line-height: 1; }
-  .header h1 { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: 0.5px; }
-  .so-badge { font-family: var(--mono); font-size: 11px; background: var(--accent); color: white; padding: 2px 8px; border-radius: 4px; margin-left: auto; }
-  .header-sub { font-size: 12px; color: var(--muted); font-family: var(--mono); }
-  .progress-wrap { padding: 12px 20px 0; }
-  .progress-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-  .progress-label { font-size: 11px; color: var(--muted); font-family: var(--mono); }
-  .progress-count { font-size: 11px; font-family: var(--mono); color: var(--green); font-weight: 600; }
-  .progress-bar-bg { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
-  .progress-bar-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width 0.4s ease; width: 0%; }
-  .list { padding: 14px 16px 0; display: flex; flex-direction: column; gap: 10px; }
-  .item-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 14px 12px; transition: border-color 0.3s, background 0.3s; position: relative; overflow: hidden; }
-  .item-card.done { border-color: var(--green); background: #0d1f18; }
-  .item-card.over { border-color: var(--red); background: #1f0d0d; }
-  .item-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--border); transition: background 0.3s; }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Disable pull-to-refresh */
+  html, body {
+    overscroll-behavior: none;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body {
+    background: var(--bg-grad);
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding-bottom: 140px;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    background: rgba(22, 26, 38, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 18px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .truck-icon { font-size: 22px; line-height: 1; flex-shrink: 0; }
+  .header h1 {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.3px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .so-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--accent);
+    color: white;
+    padding: 3px 9px;
+    border-radius: 5px;
+    font-weight: 600;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px var(--accent-glow);
+  }
+  .header-sub {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+    margin-top: 2px;
+  }
+
+  /* ── Progress ── */
+  .progress-wrap { padding: 14px 18px 0; }
+  .progress-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 7px;
+  }
+  .progress-label {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+    letter-spacing: 0.8px;
+  }
+  .progress-count {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--green);
+    font-weight: 600;
+  }
+  .progress-bar-bg {
+    height: 5px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--green));
+    border-radius: 4px;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 0%;
+    box-shadow: 0 0 12px var(--green-glow);
+  }
+
+  /* ── Product list ── */
+  .list {
+    padding: 16px 14px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .item-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 14px 12px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  }
+  .item-card.done {
+    border-color: var(--green);
+    background: var(--green-bg);
+    box-shadow: 0 0 24px rgba(0, 224, 156, 0.15);
+  }
+  .item-card.over {
+    border-color: var(--red);
+    background: var(--red-bg);
+    box-shadow: 0 0 24px rgba(255, 91, 110, 0.15);
+  }
+  .item-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: var(--border-light);
+    transition: background 0.3s;
+  }
   .item-card.done::before { background: var(--green); }
   .item-card.over::before { background: var(--red); }
-  .item-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; padding-right: 40px; line-height: 1.3; }
-  .item-meta { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 12px; }
-  .foc-tag { display: inline-block; background: #2a2200; color: var(--yellow); border: 1px solid #4a3e00; font-size: 9px; font-family: var(--mono); padding: 1px 6px; border-radius: 3px; margin-left: 6px; vertical-align: middle; }
-  .done-badge { position: absolute; top: 14px; right: 14px; font-size: 18px; opacity: 0; transition: opacity 0.3s; }
-  .item-card.done .done-badge { opacity: 1; }
-  .counter-row { display: flex; align-items: center; gap: 0; }
-  .counter-btn { width: 42px; height: 42px; border: none; border-radius: 8px; font-size: 20px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.1s, opacity 0.2s; user-select: none; -webkit-user-select: none; flex-shrink: 0; }
-  .counter-btn:active { transform: scale(0.9); }
-  .btn-minus { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
-  .btn-minus:disabled { opacity: 0.3; }
-  .btn-plus { background: var(--accent); color: white; }
-  .item-card.done .btn-plus { background: var(--green); }
-  .item-card.over .btn-plus { background: var(--red); }
-  .counter-display { flex: 1; text-align: center; font-family: var(--mono); }
-  .loaded-num { font-size: 26px; font-weight: 600; line-height: 1; color: var(--text); transition: color 0.3s; }
-  .item-card.done .loaded-num { color: var(--green); }
-  .item-card.over .loaded-num { color: var(--red); }
-  .loaded-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
-  .required-display { text-align: right; font-family: var(--mono); flex-shrink: 0; width: 56px; }
-  .required-num { font-size: 16px; font-weight: 600; color: var(--muted); }
-  .required-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
-  .footer { position: fixed; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, var(--bg) 70%, transparent); padding: 20px 16px 24px; z-index: 100; }
-  .confirm-btn { width: 100%; height: 54px; border: none; border-radius: 12px; font-family: var(--sans); font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.3s; letter-spacing: 0.3px; }
-  .confirm-btn:disabled { background: var(--surface2); color: var(--muted); cursor: not-allowed; border: 1px solid var(--border); }
-  .confirm-btn.ready { background: var(--green); color: #001a0f; box-shadow: 0 0 24px rgba(0,208,132,0.35); }
+
+  /* TOP ROW: product info */
+  .item-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .item-info { flex: 1; min-width: 0; }
+  .item-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.35;
+    margin-bottom: 4px;
+  }
+  .item-meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .meta-pill {
+    background: rgba(91, 142, 255, 0.12);
+    color: var(--accent);
+    border: 1px solid rgba(91, 142, 255, 0.25);
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+  }
+  .meta-dot { color: var(--muted-dim); }
+  .foc-tag {
+    display: inline-block;
+    background: var(--yellow-bg);
+    color: var(--yellow);
+    border: 1px solid #6b5c1f;
+    font-size: 9px;
+    font-family: var(--mono);
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  .done-badge {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #001a0f;
+    opacity: 0;
+    transform: scale(0.6);
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    flex-shrink: 0;
+    box-shadow: 0 0 12px var(--green-glow);
+  }
+  .item-card.done .done-badge {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  /* BOTTOM ROW: counter */
+  .counter-row {
+    display: grid;
+    grid-template-columns: 56px 1fr 56px;
+    gap: 10px;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    padding: 8px;
+  }
+  .item-card.done .counter-row {
+    background: rgba(0, 224, 156, 0.08);
+  }
+  .item-card.over .counter-row {
+    background: rgba(255, 91, 110, 0.08);
+  }
+
+  .counter-btn {
+    width: 100%;
+    height: 48px;
+    border: none;
+    border-radius: 8px;
+    font-size: 24px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    -webkit-user-select: none;
+    user-select: none;
+    font-family: var(--sans);
+  }
+  .counter-btn:active {
+    transform: scale(0.88);
+  }
+  .btn-minus {
+    background: var(--surface-elevated);
+    color: var(--muted);
+    border: 1px solid var(--border-light);
+  }
+  .btn-minus:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+  }
+  .btn-minus:not(:disabled):active {
+    background: var(--red);
+    color: white;
+  }
+  .btn-plus {
+    background: linear-gradient(135deg, var(--accent), #4170e8);
+    color: white;
+    box-shadow: 0 2px 12px var(--accent-glow);
+  }
+  .btn-plus:active {
+    box-shadow: 0 1px 4px var(--accent-glow);
+  }
+  .item-card.done .btn-plus {
+    background: linear-gradient(135deg, var(--green), #00b87f);
+    box-shadow: 0 2px 12px var(--green-glow);
+    color: #001a0f;
+  }
+  .item-card.over .btn-plus {
+    background: linear-gradient(135deg, var(--red), #d44456);
+    box-shadow: 0 2px 12px rgba(255, 91, 110, 0.4);
+  }
+
+  /* Center display: BIG number with Required/Loaded comparison */
+  .counter-display {
+    text-align: center;
+    font-family: var(--mono);
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+  .loaded-num {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text);
+    transition: all 0.3s;
+    min-width: 30px;
+  }
+  .item-card.done .loaded-num {
+    color: var(--green);
+    text-shadow: 0 0 16px var(--green-glow);
+  }
+  .item-card.over .loaded-num {
+    color: var(--red);
+    text-shadow: 0 0 16px rgba(255, 91, 110, 0.5);
+  }
+  .counter-divider {
+    font-size: 20px;
+    color: var(--muted-dim);
+    font-weight: 300;
+    line-height: 1;
+  }
+  .required-num {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--muted);
+    line-height: 1;
+  }
+  .counter-label {
+    display: block;
+    font-size: 8px;
+    color: var(--muted-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 4px;
+    font-weight: 500;
+  }
+
+  /* ── Footer confirm ── */
+  .footer {
+    position: fixed;
+    bottom: 0;
+    left: 0; right: 0;
+    background: linear-gradient(to top, var(--bg) 60%, transparent);
+    padding: 28px 16px 28px;
+    z-index: 100;
+  }
+  .confirm-btn {
+    width: 100%;
+    height: 58px;
+    border: none;
+    border-radius: 14px;
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    letter-spacing: 0.3px;
+  }
+  .confirm-btn:disabled {
+    background: var(--surface-elevated);
+    color: var(--muted);
+    cursor: not-allowed;
+    border: 1px solid var(--border);
+  }
+  .confirm-btn.ready {
+    background: linear-gradient(135deg, var(--green), #00b87f);
+    color: #001a0f;
+    box-shadow: 0 4px 32px var(--green-glow), 0 2px 8px rgba(0, 224, 156, 0.5);
+    animation: pulse-ready 2s ease-in-out infinite;
+  }
+  @keyframes pulse-ready {
+    0%, 100% { box-shadow: 0 4px 32px var(--green-glow), 0 2px 8px rgba(0, 224, 156, 0.5); }
+    50% { box-shadow: 0 4px 48px var(--green-glow), 0 2px 16px rgba(0, 224, 156, 0.7); }
+  }
   .confirm-btn.ready:active { transform: scale(0.98); }
-  .done-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200; align-items: center; justify-content: center; flex-direction: column; text-align: center; padding: 32px; }
+
+  /* ── Done overlay ── */
+  .done-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 13, 20, 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+    padding: 32px;
+  }
   .done-overlay.show { display: flex; }
-  .done-overlay .big-check { font-size: 64px; margin-bottom: 16px; }
-  .done-overlay h2 { font-family: var(--mono); font-size: 20px; color: var(--green); margin-bottom: 8px; }
-  .done-overlay p { font-size: 13px; color: var(--muted); line-height: 1.6; white-space: pre-line; }
-  .done-overlay .posting-label { margin-top: 20px; font-family: var(--mono); font-size: 11px; color: var(--accent); }
-  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
+  .done-overlay .big-check {
+    font-size: 80px;
+    margin-bottom: 20px;
+    animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes pop-in {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .done-overlay h2 {
+    font-family: var(--mono);
+    font-size: 22px;
+    color: var(--green);
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+  .done-overlay p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+    white-space: pre-line;
+  }
+  .done-overlay .posting-label {
+    margin-top: 24px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    padding: 8px 16px;
+    background: rgba(91, 142, 255, 0.1);
+    border: 1px solid rgba(91, 142, 255, 0.25);
+    border-radius: 8px;
+  }
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
   @keyframes spin { to { transform: rotate(360deg); } }
-  #loading { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; gap: 16px; padding: 24px; }
-  #loading .spinner { width: 24px; height: 24px; border-width: 3px; }
-  #loading p { font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: center; }
-  #error-state { display: none; padding: 40px 24px; text-align: center; }
-  #error-state h2 { color: var(--red); font-size: 16px; margin-bottom: 8px; }
-  #error-state p { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+  /* ── Loading state ── */
+  #loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    gap: 18px;
+    padding: 24px;
+  }
+  #loading .spinner { width: 28px; height: 28px; border-width: 3px; }
+  #loading p {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  #error-state {
+    display: none;
+    padding: 60px 24px;
+    text-align: center;
+  }
+  #error-state h2 {
+    color: var(--red);
+    font-size: 18px;
+    margin-bottom: 12px;
+    font-family: var(--mono);
+  }
+  #error-state p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
 </style>
 </head>
 <body>
@@ -124,10 +545,33 @@
 </div>
 
 <script>
+// Disable pull-to-refresh extra protection
+let lastTouchY = 0;
+let maybePreventPullToRefresh = false;
+
+document.addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 1) return;
+  lastTouchY = e.touches[0].clientY;
+  maybePreventPullToRefresh = window.pageYOffset === 0;
+}, { passive: false });
+
+document.addEventListener('touchmove', (e) => {
+  const touchY = e.touches[0].clientY;
+  const touchYDelta = touchY - lastTouchY;
+  lastTouchY = touchY;
+  if (maybePreventPullToRefresh) {
+    maybePreventPullToRefresh = false;
+    if (touchYDelta > 0) {
+      e.preventDefault();
+      return;
+    }
+  }
+}, { passive: false });
+
 const API_URL = '/api/dispatch?';
 
 let products = [];
-let counts   = [];
+let counts = [];
 let orderInfo = { soNumber: '', accountName: '', channel: '' };
 
 window.addEventListener('DOMContentLoaded', async () => {
@@ -158,11 +602,11 @@ window.addEventListener('DOMContentLoaded', async () => {
     let data;
     try {
       data = JSON.parse(dataStr);
-    } catch(e) {
+    } catch (e) {
       try {
         const fixed = dataStr.replace(/'/g, '"');
         data = JSON.parse(fixed);
-      } catch(e2) {
+      } catch (e2) {
         showError('Could not parse data.<br><small>' + dataStr.substring(0, 200) + '</small>');
         return;
       }
@@ -173,10 +617,10 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    orderInfo.soNumber    = data.soNumber    || soNumber;
+    orderInfo.soNumber = data.soNumber || soNumber;
     orderInfo.accountName = data.accountName || 'Unknown Account';
-    orderInfo.channel     = data.channel     || '';
-    products              = data.items       || [];
+    orderInfo.channel = data.channel || '';
+    products = data.items || [];
 
     if (products.length === 0) {
       showError('This Sales Order has no products.');
@@ -186,19 +630,19 @@ window.addEventListener('DOMContentLoaded', async () => {
     counts = products.map(() => 0);
 
     document.getElementById('hdr-account').textContent = orderInfo.accountName;
-    document.getElementById('hdr-so').textContent      = orderInfo.soNumber;
-    document.getElementById('hdr-sub').textContent     = `${products.length} product line${products.length > 1 ? 's' : ''} · Tap + as each carton loads`;
+    document.getElementById('hdr-so').textContent = orderInfo.soNumber;
+    document.getElementById('hdr-sub').textContent = `${products.length} product line${products.length > 1 ? 's' : ''} · Tap + as each carton loads`;
 
-    document.getElementById('loading').style.display       = 'none';
-    document.getElementById('header').style.display        = '';
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('header').style.display = '';
     document.getElementById('progress-wrap').style.display = '';
-    document.getElementById('product-list').style.display  = '';
-    document.getElementById('footer').style.display        = '';
+    document.getElementById('product-list').style.display = '';
+    document.getElementById('footer').style.display = '';
 
     renderProducts();
     updateProgress();
 
-  } catch(err) {
+  } catch (err) {
     console.error(err);
     showError('Could not connect to Zoho CRM.<br>Check internet & try again.<br><br><small>' + err.message + '</small>');
   }
@@ -211,20 +655,28 @@ function renderProducts() {
     const card = document.createElement('div');
     card.className = 'item-card';
     card.id = `card-${i}`;
-    const focTag = p.isFoc ? '<span class="foc-tag">FREE OF COST</span>' : '';
+    const focTag = p.isFoc ? '<span class="foc-tag">FOC</span>' : '';
+    const bagsPill = p.bagsPerCtn ? `<span class="meta-pill">${p.bagsPerCtn} bags/ctn</span>` : '';
     card.innerHTML = `
-      <div class="done-badge">✅</div>
-      <div class="item-name">${p.name}${focTag}</div>
-      <div class="item-meta">Required: <strong>${p.required} CTN</strong> &nbsp;·&nbsp; ${p.bagsPerCtn || '—'} bags/ctn</div>
+      <div class="item-top">
+        <div class="item-info">
+          <div class="item-name">${p.name}</div>
+          <div class="item-meta">
+            ${bagsPill}
+            ${focTag}
+          </div>
+        </div>
+        <div class="done-badge">✓</div>
+      </div>
       <div class="counter-row">
         <button class="counter-btn btn-minus" id="minus-${i}" onclick="adjust(${i}, -1)" disabled>−</button>
-        <div class="counter-display">
-          <div class="loaded-num" id="num-${i}">0</div>
-          <div class="loaded-label">LOADED</div>
-        </div>
-        <div class="required-display">
-          <div class="required-num">${p.required}</div>
-          <div class="required-label">REQUIRED</div>
+        <div class="counter-display-wrap">
+          <div class="counter-display">
+            <span class="loaded-num" id="num-${i}">0</span>
+            <span class="counter-divider">/</span>
+            <span class="required-num">${p.required}</span>
+          </div>
+          <span class="counter-label">Loaded / Required CTN</span>
         </div>
         <button class="counter-btn btn-plus" id="plus-${i}" onclick="adjust(${i}, +1)">+</button>
       </div>
@@ -238,21 +690,21 @@ function adjust(i, delta) {
   if (newVal < 0) return;
   counts[i] = newVal;
   document.getElementById(`num-${i}`).textContent = newVal;
-  document.getElementById(`minus-${i}`).disabled  = newVal === 0;
+  document.getElementById(`minus-${i}`).disabled = newVal === 0;
   const card = document.getElementById(`card-${i}`);
   const required = products[i].required;
   card.classList.remove('done', 'over');
   if (newVal === required) card.classList.add('done');
-  if (newVal >  required) card.classList.add('over');
+  if (newVal > required) card.classList.add('over');
   updateProgress();
 }
 
 function updateProgress() {
-  const total    = products.length;
+  const total = products.length;
   const confirmed = counts.filter((c, i) => c === products[i].required).length;
-  const allDone  = confirmed === total;
+  const allDone = confirmed === total;
   document.getElementById('progress-count').textContent = `${confirmed} / ${total} confirmed`;
-  document.getElementById('progress-fill').style.width  = `${(confirmed / total) * 100}%`;
+  document.getElementById('progress-fill').style.width = `${(confirmed / total) * 100}%`;
   const btn = document.getElementById('confirm-btn');
   btn.disabled = !allDone;
   if (allDone) {
@@ -288,19 +740,19 @@ function confirmDispatch() {
       message: cliqMsg
     })
   })
-  .then(res => res.json())
-  .then(() => {
-    document.getElementById('posting-label').innerHTML = '✅ Summary posted to Cliq!';
-  })
-  .catch(() => {
-    document.getElementById('posting-label').innerHTML = '⚠️ Could not post to Cliq — please screenshot this page.';
-  });
+    .then(res => res.json())
+    .then(() => {
+      document.getElementById('posting-label').innerHTML = '✅ Summary posted to Cliq!';
+    })
+    .catch(() => {
+      document.getElementById('posting-label').innerHTML = '⚠️ Could not post to Cliq — please screenshot this page.';
+    });
 }
 
 function showError(msg) {
-  document.getElementById('loading').style.display     = 'none';
+  document.getElementById('loading').style.display = 'none';
   document.getElementById('error-state').style.display = '';
-  document.getElementById('error-msg').innerHTML       = msg;
+  document.getElementById('error-msg').innerHTML = msg;
 }
 </script>
 </body>
