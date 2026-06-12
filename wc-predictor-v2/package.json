@@ -1,8 +1,0 @@
-{
-  "name": "raymiyo-wc-predictor",
-  "version": "2.0.0",
-  "private": true,
-  "dependencies": {
-    "@upstash/redis": "^1.34.0"
-  }
-}
