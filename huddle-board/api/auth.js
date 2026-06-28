@@ -93,7 +93,7 @@ export default async function handler(req, res) {
       headers: { Authorization: `Zoho-oauthtoken ${tokenData.access_token}` },
     });
     const profile = await profileRes.json();
-    const email = (profile.Email || profile.email || profile.ZUID || "").toLowerCase();
+    const email = (profile.Email || profile.email || profile.Email_ID || "").toLowerCase();
     console.log("Zoho profile response:", JSON.stringify(profile));
 
     if (!ALLOWED_EMAILS.includes(email)) {
