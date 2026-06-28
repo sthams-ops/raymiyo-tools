@@ -13,12 +13,12 @@ function getCookie(req, name) {
 
 // Map email to team member id
 const EMAIL_TO_ID = {
-  "mijesh@unijoynepal.com": "admin",
+  "mijesh.shrestha@unijoynepal.com": "admin",
   "sajina@unijoynepal.com": "sajina",
-  "divash@unijoynepal.com": "divash",
-  "manoj@unijoynepal.com": "manoj",
-  "krisha@unijoynepal.com": "krisha",
-  "sunil@unijoynepal.com": "sunil",
+  "divash.shilpakar@unijoynepal.com": "divash",
+  "accounts@unijoynepal.com": "manoj",
+  "info@unijoynepal.com": "krisha",
+  "sunil.shrestha@unijoynepal.com": "sunil",
 };
 
 export default async function handler(req, res) {

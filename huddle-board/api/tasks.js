@@ -20,15 +20,14 @@ async function getSession(req) {
 }
 
 const EMAIL_TO_ID = {
-  "mijesh@unijoynepal.com": "admin",
   "sajina@unijoynepal.com": "sajina",
-  "divash@unijoynepal.com": "divash",
-  "manoj@unijoynepal.com": "manoj",
-  "krisha@unijoynepal.com": "krisha",
-  "sunil@unijoynepal.com": "sunil",
+  "divash.shilpakar@unijoynepal.com": "divash",
+  "accounts@unijoynepal.com": "manoj",
+  "info@unijoynepal.com": "krisha",
+  "sunil.shrestha@unijoynepal.com": "sunil",
 };
 
-const ADMIN_EMAIL = "mijesh@unijoynepal.com";
+const ADMIN_EMAIL = "mijesh.shrestha@unijoynepal.com";
 
 // weekKey format: YYYY-MM-DD (Monday of that week)
 export default async function handler(req, res) {

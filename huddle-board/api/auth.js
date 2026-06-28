@@ -11,16 +11,16 @@ const APP_URL = process.env.HUDDLE_APP_URL;
 const REDIRECT_URI = `${APP_URL}/api/auth?action=callback`;
 
 const ALLOWED_EMAILS = [
-  "mijesh@unijoynepal.com",
-  "bivek@unijoynepal.com",
+  "mijesh.shrestha@unijoynepal.com",
+  "bivek.maharjan@unijoynepal.com",
+  "divash.shilpakar@unijoynepal.com",
   "sajina@unijoynepal.com",
-  "divash@unijoynepal.com",
-  "manoj@unijoynepal.com",
-  "krisha@unijoynepal.com",
-  "sunil@unijoynepal.com",
+  "accounts@unijoynepal.com",
+  "info@unijoynepal.com",
+  "sunil.shrestha@unijoynepal.com",
 ];
 
-const ADMIN_EMAIL = "mijesh@unijoynepal.com";
+const ADMIN_EMAIL = "mijesh.shrestha@unijoynepal.com";
 
 function randomState() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
