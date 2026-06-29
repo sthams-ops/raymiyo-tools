@@ -97,15 +97,32 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
   const handleCarry = async () => {
     if (selectedForCarry.length === 0) return;
     setCarrying(true);
-    await fetch("/api/carry", {
+
+    const tasksToCarry = selectedForCarry.map(i => ({
+      ...tasks[i],
+      pct: 0,
+      carriedFrom: weekKey,
+      carriedFromPct: tasks[i].pct || 0,
+      carryCount: (tasks[i].carryCount || 0) + 1,
+    }));
+
+    const res = await fetch("/api/carry", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fromWeek: weekKey, memberId: member.id, taskIndexes: selectedForCarry }),
+      body: JSON.stringify({
+        fromWeek: weekKey,
+        memberId: member.id,
+        taskIndexes: selectedForCarry,
+        tasksData: tasksToCarry,
+      }),
     });
+    const data = await res.json();
     setCarrying(false);
     setCarryMode(false);
     setSelectedForCarry([]);
-    alert(`✅ ${selectedForCarry.length} task(s) carried to next week!`);
+    if (data.success) {
+      alert(`✅ ${tasksToCarry.length} task(s) carried to next week!`);
+    }
   };
 
   return (
@@ -238,8 +255,15 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
                       }}>
                         {task.text}
                         {task.carriedFrom && (
-                          <span style={{ marginLeft: 6, fontSize: 10, color: "#FBBF24", opacity: 0.7 }}>
-                            ↩ carried
+                          <span style={{
+                            marginLeft: 6, fontSize: 9,
+                            background: "rgba(251,191,36,0.15)",
+                            border: "1px solid rgba(251,191,36,0.3)",
+                            color: "#FBBF24", borderRadius: 4, padding: "1px 5px",
+                            fontWeight: 600, letterSpacing: 0.3,
+                          }}>
+                            ↩ {task.carryCount > 1 ? `×${task.carryCount}` : "carried"}
+                            {task.carriedFromPct > 0 && ` (was ${task.carriedFromPct}%)`}
                           </span>
                         )}
                       </div>
