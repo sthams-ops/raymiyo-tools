@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import GlowCard from "./GlowCard.jsx";
 
 const MICRO_QUOTES = {
   high: ["On fire this week 🔥", "Crushing it!", "The team sees you 👏"],
@@ -92,16 +93,15 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setTilt({ x: 0, y: 0 }); }}
       onMouseMove={handleMouseMove}
+    >
+    <GlowCard
+      glowColor={member.id === "sajina" ? "purple" : member.id === "divash" ? "blue" : member.id === "manoj" ? "amber" : member.id === "krisha" ? "pink" : "green"}
       style={{
-        position: "relative", overflow: "hidden",
-        background: "rgba(12,12,28,0.75)", backdropFilter: "blur(20px)",
-        border: `1px solid ${hovered ? member.color + "55" : "rgba(255,255,255,0.06)"}`,
-        borderRadius: 20,
         transform: hovered
           ? `perspective(900px) rotateY(${tilt.x}deg) rotateX(${tilt.y}deg) translateY(-6px)`
           : "perspective(900px) rotateY(0) rotateX(0) translateY(0)",
-        transition: "transform 0.15s ease, border-color 0.3s, box-shadow 0.3s",
-        boxShadow: hovered ? `0 24px 60px ${member.glow}, 0 0 0 1px ${member.color}25` : "0 4px 20px rgba(0,0,0,0.4)",
+        transition: "transform 0.15s ease, box-shadow 0.3s",
+        boxShadow: hovered ? `0 24px 60px ${member.glow}` : "0 4px 20px rgba(0,0,0,0.4)",
         animation: "fadeUp 0.5s ease forwards",
         opacity: 0,
       }}
@@ -342,6 +342,7 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
           </div>
         )}
       </div>
+    </GlowCard>
     </div>
   );
 }
