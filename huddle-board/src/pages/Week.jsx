@@ -4,6 +4,7 @@ import { useAuth } from "../App.jsx";
 import MemberCard from "../components/MemberCard.jsx";
 import QuoteBar from "../components/QuoteBar.jsx";
 import CalendarPicker from "../components/CalendarPicker.jsx";
+import FallingPattern from "../components/FallingPattern.jsx";
 
 const TEAM = [
   { id: "sajina",  name: "Sajina",  role: "CRM / B2B",    color: "#7C3AED", glow: "#7C3AED35", gradient: "linear-gradient(135deg,#7C3AED,#A78BFA)", light: "#A78BFA" },
@@ -140,11 +141,11 @@ export default function Week() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "linear-gradient(135deg,#020617 0%,#0a0a1e 40%,#0d0620 70%,#020617 100%)",
-      backgroundSize: "400% 400%", animation: "bgDrift 20s ease infinite",
+      background: "#020617",
       fontFamily: "var(--font-body)", padding: "24px 28px",
     }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+      <FallingPattern color="rgba(124,58,237,0.5)" duration={150} blurIntensity="0.8em" density={1} />
+      <div style={{ maxWidth: 1200, margin: "0 auto", position: "relative", zIndex: 1 }}>
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>
