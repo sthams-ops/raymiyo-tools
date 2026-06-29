@@ -92,7 +92,6 @@ export default function GlowCard({ children, glowColor = "blue", style = {}, cla
             hsl(var(--hue) 100% 70% / 0.08), transparent
           )`,
           backgroundColor: "var(--backdrop)",
-          backgroundAttachment: "fixed",
           border: "var(--border-size) solid var(--backup-border)",
           position: "relative",
           touchAction: "none",
