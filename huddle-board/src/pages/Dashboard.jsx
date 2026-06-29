@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../App.jsx";
 import { motion, useMotionValue, useTransform } from "framer-motion";
 import CalendarPicker from "../components/CalendarPicker.jsx";
+import AuroraBackground from "../components/AuroraBackground.jsx";
 
 function getMondayKey(date = new Date()) {
   const d = new Date(date);
@@ -203,11 +204,11 @@ export default function Dashboard() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "linear-gradient(135deg,#020617 0%,#0a0a1e 40%,#0d0620 70%,#020617 100%)",
-      backgroundSize: "400% 400%", animation: "bgDrift 20s ease infinite",
+      background: "#020617",
       fontFamily: "var(--font-body)", padding: "24px 28px",
     }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+      <AuroraBackground />
+      <div style={{ maxWidth: 1100, margin: "0 auto", position: "relative", zIndex: 1 }}>
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 16 }}>

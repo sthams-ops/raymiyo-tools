@@ -7,7 +7,7 @@ import CalendarPicker from "../components/CalendarPicker.jsx";
 
 const TEAM = [
   { id: "sajina",  name: "Sajina",  role: "CRM / B2B",    color: "#7C3AED", glow: "#7C3AED35", gradient: "linear-gradient(135deg,#7C3AED,#A78BFA)", light: "#A78BFA" },
-  { id: "divash",  name: "Divash",  role: "Field Visits",  color: "#0EA5E9", glow: "#0EA5E935", gradient: "linear-gradient(135deg,#0EA5E9,#38BDF8)", light: "#38BDF8" },
+  { id: "divash",  name: "Divash",  role: "Operations",  color: "#0EA5E9", glow: "#0EA5E935", gradient: "linear-gradient(135deg,#0EA5E9,#38BDF8)", light: "#38BDF8" },
   { id: "manoj",   name: "Manoj",   role: "Accounts",      color: "#D97706", glow: "#D9770635", gradient: "linear-gradient(135deg,#D97706,#FBBF24)", light: "#FBBF24" },
   { id: "krisha",  name: "Krisha",  role: "Content",       color: "#DB2777", glow: "#DB277735", gradient: "linear-gradient(135deg,#DB2777,#F472B6)", light: "#F472B6" },
   { id: "sunil",   name: "Sunil",   role: "Warehouse",     color: "#059669", glow: "#05966935", gradient: "linear-gradient(135deg,#059669,#34D399)", light: "#34D399" },
