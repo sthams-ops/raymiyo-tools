@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import GlowCard from "./GlowCard.jsx";
 
 const MICRO_QUOTES = {
   high: ["On fire this week 🔥", "Crushing it!", "The team sees you 👏"],
@@ -24,7 +23,7 @@ function ProgressRing({ pct, color, size = 52, stroke = 3 }) {
 
 export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId, onUpdate, weekKey }) {
   const [hovered, setHovered] = useState(false);
-  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const [tooltip, setTooltip] = useState(false);
   const [newTask, setNewTask] = useState("");
   const [carryMode, setCarryMode] = useState(false);
   const [selectedForCarry, setSelectedForCarry] = useState([]);
@@ -43,13 +42,35 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
   const mq = done >= 80 ? MICRO_QUOTES.high : done >= 50 ? MICRO_QUOTES.mid : MICRO_QUOTES.low;
   const microQuote = mq[Math.floor(Date.now() / 5000) % mq.length];
 
-  const handleMouseMove = (e) => {
+  const handleCardMouseMove = (e) => {
     if (!cardRef.current) return;
-    const r = cardRef.current.getBoundingClientRect();
-    setTilt({
-      x: ((e.clientX - r.left) / r.width - 0.5) * 8,
-      y: -((e.clientY - r.top) / r.height - 0.5) * 8,
-    });
+    const card = cardRef.current;
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const rX = (y - centerY) / 10;
+    const rY = (centerX - x) / 10;
+    card.style.setProperty("--x", `${x}px`);
+    card.style.setProperty("--y", `${y}px`);
+    card.style.setProperty("--bg-x", `${(x / rect.width) * 100}%`);
+    card.style.setProperty("--bg-y", `${(y / rect.height) * 100}%`);
+    card.style.transform = `perspective(1000px) rotateX(${rX}deg) rotateY(${rY}deg)`;
+    setHovered(true);
+    setTooltip(true);
+  };
+
+  const handleCardMouseLeave = () => {
+    if (!cardRef.current) return;
+    const card = cardRef.current;
+    card.style.transform = "perspective(1000px) rotateX(0deg) rotateY(0deg)";
+    card.style.setProperty("--x", "50%");
+    card.style.setProperty("--y", "50%");
+    card.style.setProperty("--bg-x", "50%");
+    card.style.setProperty("--bg-y", "50%");
+    setHovered(false);
+    setTooltip(false);
   };
 
   const addTask = () => {
@@ -90,31 +111,43 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
   return (
     <div
       ref={cardRef}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => { setHovered(false); setTilt({ x: 0, y: 0 }); }}
-      onMouseMove={handleMouseMove}
-    >
-    <GlowCard
-      glowColor={member.id === "sajina" ? "purple" : member.id === "divash" ? "blue" : member.id === "manoj" ? "amber" : member.id === "krisha" ? "pink" : "green"}
+      onMouseMove={handleCardMouseMove}
+      onMouseLeave={handleCardMouseLeave}
       style={{
-        transform: hovered
-          ? `perspective(900px) rotateY(${tilt.x}deg) rotateX(${tilt.y}deg) translateY(-6px)`
-          : "perspective(900px) rotateY(0) rotateX(0) translateY(0)",
-        transition: "transform 0.15s ease, box-shadow 0.3s",
-        boxShadow: hovered ? `0 24px 60px ${member.glow}` : "0 4px 20px rgba(0,0,0,0.4)",
+        position: "relative",
+        borderRadius: 20,
+        overflow: "hidden",
+        transition: "box-shadow 0.3s ease",
         animation: "fadeUp 0.5s ease forwards",
         opacity: 0,
+        boxShadow: `0 8px 32px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.06)`,
+        background: `
+          radial-gradient(circle at var(--x, 50%) var(--y, 50%), ${member.color}22 0%, transparent 60%),
+          rgba(12, 12, 28, 0.85)
+        `,
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        border: `1px solid rgba(255,255,255,0.07)`,
       }}
     >
-      {/* Top accent */}
-      <div style={{ height: 3, background: member.gradient, boxShadow: `0 0 10px ${member.color}80` }} />
+      {/* Holographic glow layer */}
+      <div style={{
+        position: "absolute", inset: 0, borderRadius: 20, pointerEvents: "none",
+        background: `radial-gradient(circle at var(--bg-x, 50%) var(--bg-y, 50%), ${member.color}30 0%, transparent 65%)`,
+        transition: "background 0.1s ease",
+        zIndex: 0,
+      }} />
 
-      {/* Pulse */}
+      {/* Top accent bar */}
+      <div style={{ height: 3, background: member.gradient, boxShadow: `0 0 10px ${member.color}80`, position: "relative", zIndex: 1 }} />
+
+      {/* Pulse overlay */}
       {pulse && (
         <div style={{
-          position: "absolute", inset: 0, pointerEvents: "none", zIndex: 10, borderRadius: 20,
-          background: `radial-gradient(circle, ${member.color}25, transparent 70%)`,
+          position: "absolute", inset: 0, borderRadius: 20, pointerEvents: "none",
           animation: "fadeIn 0.1s ease, pulse 0.6s ease forwards",
+          background: `radial-gradient(circle at center, ${member.color}25, transparent 70%)`,
+          zIndex: 10,
         }} />
       )}
 
@@ -124,10 +157,11 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
           position: "absolute", top: 10, right: 12, fontSize: 10,
           background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.3)",
           color: "#FBBF24", borderRadius: 6, padding: "2px 7px", letterSpacing: 0.5,
+          zIndex: 2,
         }}>↩ has carried tasks</div>
       )}
 
-      <div style={{ padding: "16px 18px 18px" }}>
+      <div style={{ padding: "16px 18px 18px", position: "relative", zIndex: 1 }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
           <div style={{ position: "relative", width: 52, height: 52, flexShrink: 0 }}>
@@ -186,7 +220,6 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
                   animation: task.carriedFrom ? "carryIn 0.4s ease" : "none",
                 }}>
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
-                    {/* Carry checkbox */}
                     {carryMode && (
                       <input
                         type="checkbox"
@@ -245,7 +278,6 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
                     }}>
                       {task.pct || 0}%
                     </div>
-                    {/* Manual input for precision */}
                     {canEditPct && (
                       <input
                         type="number" min={0} max={100}
@@ -342,7 +374,6 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
           </div>
         )}
       </div>
-    </GlowCard>
     </div>
   );
 }
