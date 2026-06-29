@@ -19,20 +19,16 @@ async function getSession(req) {
   return typeof raw === "string" ? JSON.parse(raw) : raw;
 }
 
-// Get all Monday week keys for a given YYYY-MM
 function getWeeksInMonth(year, month) {
   const weeks = [];
   const firstDay = new Date(year, month - 1, 1);
   const lastDay = new Date(year, month, 0);
 
-  // Find first Monday on or before the 1st
+  // Find first Sunday on or before the 1st
   const d = new Date(firstDay);
-  const dow = d.getDay();
-  const diff = dow === 0 ? -6 : 1 - dow;
-  d.setDate(d.getDate() + diff);
+  d.setDate(d.getDate() - d.getDay());
 
   while (d <= lastDay) {
-    // Only include if the week overlaps with this month
     const weekEnd = new Date(d);
     weekEnd.setDate(weekEnd.getDate() + 6);
     if (weekEnd >= firstDay) {

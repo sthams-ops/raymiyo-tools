@@ -296,6 +296,15 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
         {/* Admin: carry forward controls */}
         {isAdmin && tasks.some(t => (t.pct || 0) < 100) && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {tasks.some(t => (t.pct || 0) < 100) && !carryMode && (
+              <div style={{
+                fontSize: 11, padding: "6px 10px", borderRadius: 7, marginBottom: 6,
+                background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)",
+                color: "#FBBF24", lineHeight: 1.5,
+              }}>
+                ⚠️ {tasks.filter(t => (t.pct || 0) < 100).length} task(s) not at 100% — carry them to next week or they stay here.
+              </div>
+            )}
             {!carryMode ? (
               <button
                 onClick={() => setCarryMode(true)}

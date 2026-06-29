@@ -3,7 +3,7 @@ import { useState } from "react";
 function getMondayKey(date) {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
+  const diff = -day;
   d.setDate(d.getDate() + diff);
   return d.toISOString().split("T")[0];
 }
@@ -13,12 +13,11 @@ function getDaysInMonth(year, month) {
 }
 
 function getFirstDayOfMonth(year, month) {
-  const d = new Date(year, month, 1).getDay();
-  return d === 0 ? 6 : d - 1; // Monday = 0
+  return new Date(year, month, 1).getDay();
 }
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const DAYS = ["Mo","Tu","We","Th","Fr","Sa","Su"];
+const DAYS = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
 export default function CalendarPicker({ selectedWeek, onSelectWeek, onClose }) {
   const today = new Date();
@@ -119,8 +118,8 @@ export default function CalendarPicker({ selectedWeek, onSelectWeek, onClose }) 
           {cells.map((day, i) => {
             const inWeek = day && weekHighlightMap.has(day);
             const isTod = isToday(day);
-            const isMonday = day && (i % 7 === 0);
-            const isSunday = day && (i % 7 === 6);
+            const isSunday = day && (i % 7 === 0);
+            const isSaturday = day && (i % 7 === 6);
 
             return (
               <div
@@ -130,9 +129,9 @@ export default function CalendarPicker({ selectedWeek, onSelectWeek, onClose }) 
                   height: 36, display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 12, cursor: day ? "pointer" : "default",
                   borderRadius: inWeek
-                    ? isMonday || (!cells[i - 1] && day)
+                    ? isSunday || (!cells[i - 1] && day)
                       ? "8px 0 0 8px"
-                      : isSunday || (i === cells.length - 1)
+                      : isSaturday || (i === cells.length - 1)
                         ? "0 8px 8px 0"
                         : 0
                     : 8,

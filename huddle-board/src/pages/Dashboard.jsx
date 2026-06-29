@@ -6,8 +6,7 @@ import CalendarPicker from "../components/CalendarPicker.jsx";
 function getMondayKey(date = new Date()) {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
+  d.setDate(d.getDate() - day);
   return d.toISOString().split("T")[0];
 }
 
