@@ -141,7 +141,7 @@ export default function Week() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "#020617",
+      background: "transparent",
       fontFamily: "var(--font-body)", padding: "24px 28px",
     }}>
       <FallingPattern color="rgba(124,58,237,0.5)" duration={150} blurIntensity="0.8em" density={1} />
