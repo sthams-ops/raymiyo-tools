@@ -203,6 +203,15 @@ input[type=number]{-moz-appearance:textfield}
 .mobile-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 4px;cursor:pointer;border:none;background:none;color:var(--dim);font-size:9px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;font-family:'Oswald',sans-serif;transition:color .15s}
 .mobile-tab .icon{font-size:19px}
 .mobile-tab.active{color:var(--cyan)}
+.result-row{display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.02);border-radius:8px;padding:10px 14px;margin-top:10px;gap:10px}
+.result-actual{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--cyan)}
+.result-my{font-size:12px;color:var(--muted);line-height:1.6}
+.result-my strong{color:var(--off)}
+.pts-badge{font-family:'Bebas Neue',sans-serif;font-size:28px;min-width:50px;text-align:right}
+.pts-badge.exact{color:var(--gold)}
+.pts-badge.correct{color:var(--green)}
+.pts-badge.wrong{color:var(--red)}
+.pts-badge.pending{color:var(--dim)}
 @media(max-width:640px){
   .tabs{display:none}
   .mobile-nav{display:block}
@@ -265,9 +274,11 @@ input[type=number]{-moz-appearance:textfield}
   </div>
 
   <div id="page-predict" class="page">
-    <div class="section-title">🎯 Submit Your Predictions</div>
+    <div class="section-title">🎯 Upcoming — Submit Predictions</div>
     <div class="note-box"><strong>⚠️ Once submitted, predictions are LOCKED.</strong> You cannot change them. Think carefully before locking in!</div>
-    <div class="matches-list" id="predict-list"><div class="loading-state"><div class="spinner"></div><p style="margin-top:16px">Loading upcoming matches...</p></div></div>
+    <div class="matches-list" id="predict-list"><div class="loading-state"><div class="spinner"></div><p style="margin-top:16px">Loading...</p></div></div>
+    <div class="section-title" id="history-title" style="display:none">📋 My Prediction History</div>
+    <div class="matches-list" id="history-list"></div>
   </div>
 
   <div id="page-matches" class="page">
@@ -348,7 +359,38 @@ function toast(m,t='success'){const e=document.getElementById('toast');e.textCon
 async function loadLeaderboard(){try{const[lr,mr]=await Promise.all([fetch(API('predictions?action=leaderboard'),{credentials:'include'}),fetchAllMatches()]);const lb=await lr.json();document.getElementById('stat-days').textContent=Math.max(0,Math.ceil((new Date('2026-07-19')-new Date())/864e5));document.getElementById('stat-matches').textContent=(S.matches||[]).filter(m=>m.status==='FINISHED').length;renderLB(lb.leaderboard||[])}catch(e){document.getElementById('leaderboard-list').innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><p>Could not load leaderboard</p></div>'}}
 function renderLB(players){const el=document.getElementById('leaderboard-list');if(!players.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><p>No scores yet — submit predictions!</p></div>';return}el.innerHTML=players.map((p,i)=>{const rc=i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'';const me=S.user?.player?.id===p.id;const c=PC[p.id]||'#6B7FA0';const pr=i===0?' · 🥇 ₨10K':i===1?' · 🥈 ₨3K':i===2?' · 🥉 ₨2K':'';return`<div class="lb-item ${rc}"><div class="lb-rank">${i+1}</div><div class="lb-avatar" style="background:${c}12;border-color:${c}28">${p.emoji}</div><div class="lb-info"><div class="lb-name ${me?'is-me':''}" style="color:${c}">${p.name}</div><div class="lb-meta">${p.predictions} predicted · ${p.correct} correct · ${p.exact} exact ⭐${pr}</div></div><div class="lb-pts"><div class="lb-pts-num" style="color:${c}">${p.total}</div><div class="lb-pts-lbl">pts</div></div></div>`}).join('')}
 
-async function loadPredictPage(){const el=document.getElementById('predict-list');el.innerHTML='<div class="loading-state"><div class="spinner"></div><p style="margin-top:16px">Loading...</p></div>';try{await fetchAllMatches();const pr=await fetch(API('predictions?action=my-predictions'),{credentials:'include'});const pd=await pr.json();S.myPredictions=pd.predictions||{};const up=S.matches.filter(m=>m.status==='TIMED'||m.status==='SCHEDULED'||m.status==='IN_PLAY').slice(0,20);if(!up.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><p>No upcoming matches right now</p></div>';return}el.innerHTML=up.map(m=>renderPC(m)).join('')}catch(e){el.innerHTML=`<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error: ${e.message}</p></div>`}}
+async function loadPredictPage(){
+  const el=document.getElementById('predict-list');
+  const hl=document.getElementById('history-list');
+  const ht=document.getElementById('history-title');
+  el.innerHTML='<div class="loading-state"><div class="spinner"></div><p style="margin-top:16px">Loading...</p></div>';
+  hl.innerHTML='';ht.style.display='none';
+  try{
+    await fetchAllMatches();
+    const pr=await fetch(API('predictions?action=my-predictions'),{credentials:'include'});
+    const pd=await pr.json();
+    S.myPredictions=pd.predictions||{};
+    const upcoming=S.matches.filter(m=>m.status==='TIMED'||m.status==='SCHEDULED'||m.status==='IN_PLAY');
+    const finished=S.matches.filter(m=>m.status==='FINISHED').reverse();
+    if(!upcoming.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><p>No upcoming matches right now</p></div>'}
+    else{el.innerHTML=upcoming.slice(0,20).map(m=>renderPC(m)).join('')}
+    const myFinished=finished.filter(m=>S.myPredictions[m.id]);
+    if(myFinished.length){
+      ht.style.display='flex';
+      hl.innerHTML=myFinished.map(m=>{
+        const h=m.homeTeam?.name||'TBD',a=m.awayTeam?.name||'TBD';
+        const ex=S.myPredictions[m.id];
+        const actualH=m.score?.fullTime?.home??'?',actualA=m.score?.fullTime?.away??'?';
+        const sl=(m.stage||m.group||'').replace(/_/g,' ');
+        const myLbl=ex.prediction==='HOME'?`${flag(h)} ${h}`:ex.prediction==='AWAY'?`${flag(a)} ${a}`:'🤝 Draw';
+        const mySc=ex.homeScore!==null&&ex.awayScore!==null?` ${ex.homeScore}–${ex.awayScore}`:'';
+        const ptsCls=ex.points===3?'exact':ex.points===1?'correct':ex.points===0?'wrong':'pending';
+        const ptsLbl=ex.points===3?'⭐+3':ex.points===1?'✓+1':ex.points===0?'✗0':'?';
+        return`<div class="match-card"><div class="match-stage-label"><span>${sl}</span><span class="badge b-ft">FT</span></div><div class="match-body"><div class="match-teams"><div class="match-team"><div class="match-flag">${flag(h)}</div><div class="match-country">${h}</div></div><div class="match-score">${actualH}–${actualA}</div><div class="match-team"><div class="match-flag">${flag(a)}</div><div class="match-country">${a}</div></div></div><div class="result-row"><div class="result-my"><strong>My pick:</strong> ${myLbl}${mySc}</div><div class="pts-badge ${ptsCls}">${ptsLbl}</div></div></div></div>`;
+      }).join('');
+    }
+  }catch(e){el.innerHTML=`<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error: ${e.message}</p></div>`}
+}
 
 function renderPC(m){const h=m.homeTeam?.name||'TBD',a=m.awayTeam?.name||'TBD';const ko=m.utcDate?new Date(m.utcDate).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kathmandu'})+' NPT':'TBD';const live=m.status==='IN_PLAY'||m.status==='PAUSED';const sl=(m.stage||m.group||'').replace(/_/g,' ');const ex=S.myPredictions[m.id];let pH='';if(ex){const lbl=ex.prediction==='HOME'?`${flag(h)} ${h}`:ex.prediction==='AWAY'?`${flag(a)} ${a}`:'🤝 Draw';const ss=ex.homeScore!==null&&ex.awayScore!==null?` · ${ex.homeScore}–${ex.awayScore}`:'';const tm=new Date(ex.submittedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kathmandu'});let ps='';if(ex.points===3)ps='<span style="color:var(--gold);margin-left:8px">⭐ +3 exact!</span>';else if(ex.points===1)ps='<span style="color:var(--green);margin-left:8px">✓ +1</span>';else if(ex.points===0)ps='<span style="color:var(--red);margin-left:8px">✗ 0</span>';pH=`<div class="pred-section"><div class="pred-locked"><div class="pred-locked-icon">🔒</div><div class="pred-locked-text"><strong>${lbl}${ss}</strong>${ps}<div class="pred-locked-time">Submitted ${tm} NPT · Locked</div></div></div></div>`}else if(!live){pH=`<div class="pred-section"><div class="pred-title">Your Prediction — Locked on Submit</div><div class="pred-btns"><button class="pred-btn" onclick="setPred(this,'${m.id}','HOME')">${flag(h)} ${h.split(' ')[0]}</button><button class="pred-btn" onclick="setPred(this,'${m.id}','DRAW')">Draw</button><button class="pred-btn" onclick="setPred(this,'${m.id}','AWAY')">${flag(a)} ${a.split(' ')[0]}</button></div><div class="score-inputs"><input type="number" class="score-input" id="hs-${m.id}" placeholder="0" min="0" max="20"><span class="score-dash">–</span><input type="number" class="score-input" id="as-${m.id}" placeholder="0" min="0" max="20"><span class="score-hint">Optional exact score = <strong>3 pts</strong></span></div><button class="submit-btn" id="sb-${m.id}" onclick="submitPred('${m.id}','${m.utcDate}','${h}','${a}')">🔒 Lock In Prediction</button></div>`}else{pH=`<div class="pred-section"><p style="font-size:13px;color:var(--dim)">⏱️ Match in progress — predictions closed</p></div>`}return`<div class="match-card" id="mc-${m.id}"><div class="match-stage-label"><span>${sl}</span><span class="badge b-sched">${ko}</span></div><div class="match-body"><div class="match-teams"><div class="match-team"><div class="match-flag">${flag(h)}</div><div class="match-country">${h}</div></div><div class="match-score">vs</div><div class="match-team"><div class="match-flag">${flag(a)}</div><div class="match-country">${a}</div></div></div>${pH}</div></div>`}
 
