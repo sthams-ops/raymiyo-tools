@@ -15,11 +15,12 @@ const TEAM = [
 ];
 
 const EMAIL_TO_ID = {
-  "sajina@unijoynepal.com":  "sajina",
-  "divash@unijoynepal.com":  "divash",
-  "manoj@unijoynepal.com":   "manoj",
-  "krisha@unijoynepal.com":  "krisha",
-  "sunil@unijoynepal.com":   "sunil",
+  "mijesh.shrestha@unijoynepal.com": "admin",
+  "sajina@unijoynepal.com":          "sajina",
+  "divash.shilpakar@unijoynepal.com": "divash",
+  "accounts@unijoynepal.com":        "manoj",
+  "info@unijoynepal.com":            "krisha",
+  "sunil.shrestha@unijoynepal.com":  "sunil",
 };
 
 function getMondayKey(date = new Date()) {
@@ -89,8 +90,11 @@ export default function Week() {
   const [calOpen, setCalOpen] = useState(false);
   const [showPrev, setShowPrev] = useState(false);
 
-  const isAdmin = user?.isAdmin;
-  const currentUserMemberId = EMAIL_TO_ID[user?.email] || null;
+  const isAdmin = user?.isAdmin || false;
+  const userEmail = (user?.email || "").toLowerCase().trim();
+  const currentUserMemberId = EMAIL_TO_ID[userEmail] || null;
+
+  console.log("DEBUG auth:", { userEmail, isAdmin, currentUserMemberId });
   const thisWeek = getMondayKey();
   const isThisWeek = weekKey === thisWeek;
   const prevWeek = getPrevWeekKey(weekKey);

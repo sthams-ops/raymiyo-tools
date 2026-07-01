@@ -73,7 +73,9 @@ export default async function handler(req, res) {
       const existing = weekData[memberId] || [];
       const updated = existing.map((task, i) => ({
         ...task,
-        pct: typeof tasks[i]?.pct === "number" ? Math.min(100, Math.max(0, tasks[i].pct)) : task.pct,
+        pct: tasks[i] !== undefined && typeof tasks[i].pct === "number"
+          ? Math.min(100, Math.max(0, Math.round(tasks[i].pct)))
+          : task.pct,
       }));
       weekData[memberId] = updated;
     } else {
@@ -82,6 +84,9 @@ export default async function handler(req, res) {
         text: String(t.text || "").trim(),
         pct: typeof t.pct === "number" ? Math.min(100, Math.max(0, Math.round(t.pct))) : 0,
         addedAt: t.addedAt || Date.now(),
+        ...(t.carriedFrom && { carriedFrom: t.carriedFrom }),
+        ...(t.carriedFromPct !== undefined && { carriedFromPct: t.carriedFromPct }),
+        ...(t.carryCount !== undefined && { carryCount: t.carryCount }),
       })).filter((t) => t.text.length > 0);
     }
 
