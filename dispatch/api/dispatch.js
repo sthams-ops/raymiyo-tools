@@ -6,10 +6,10 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const ZOHO_API_KEY = process.env.ZOHO_DISPATCH_API_KEY;
-  const CLIQ_TOKEN = process.env.CLIQ_DISPATCH_TOKEN;
+  const RAW_KEY = process.env.ZOHO_DISPATCH_API_KEY || '';
+  const ZOHO_API_KEY = (RAW_KEY.includes('zapikey=') ? RAW_KEY.split('zapikey=')[1] : RAW_KEY).trim();
+  const CLIQ_TOKEN = (process.env.CLIQ_DISPATCH_TOKEN || '').trim();
   const ZOHO_URL = `https://www.zohoapis.com/crm/v7/functions/getdispatchdata/actions/execute?auth_type=apikey&zapikey=${ZOHO_API_KEY}`;
-  const ALLOWED_CHANNELS = ['crmalert'];
 
   if (req.method === 'GET') {
     const soNumber = req.query.so;
@@ -38,8 +38,10 @@ export default async function handler(req, res) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: message })
       });
-      const data = await response.json();
-      return res.status(200).json(data);
+      const text = await response.text();
+      let data = {};
+      try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { raw: text.slice(0, 200) }; }
+      return res.status(response.ok ? 200 : 502).json({ ok: response.ok, status: response.status, data });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
