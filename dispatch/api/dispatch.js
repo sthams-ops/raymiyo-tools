@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     if (!message) {
       return res.status(400).json({ error: 'Missing message' });
     }
-    const targetChannel = ALLOWED_CHANNELS.includes(channel) ? channel : 'crmalert';
+    const targetChannel = /^[a-z0-9_]{1,80}$/.test(channel || '') ? channel : 'crmalert';
     const webhookUrl = `https://cliq.zoho.com/api/v2/channelsbyname/${targetChannel}/message?zapikey=${CLIQ_TOKEN}`;
     try {
       const response = await fetch(webhookUrl, {
