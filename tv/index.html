@@ -6,21 +6,77 @@
 <title>Raymiyo TV Board</title>
 <style>
   html,body{margin:0;height:100%;background:#0b1120;color:#e6edf7;
-    font-family:system-ui,sans-serif}
+    font-family:system-ui,sans-serif;overflow:hidden}
   .wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:24px;padding:24px;box-sizing:border-box}
-  h1{font-size:16px;font-weight:600;letter-spacing:3px;opacity:.55;margin:0}
-  .tile{background:#fff;border-radius:16px;padding:10px;
-    box-shadow:0 24px 70px rgba(0,0,0,.55)}
-  .tile img{display:block;max-width:92vw;height:auto;border-radius:10px}
+    justify-content:center;gap:22px;padding:3vh 2vw;box-sizing:border-box}
+  .brand{font-size:15px;font-weight:600;letter-spacing:4px;opacity:.45;margin:0}
+  .title{font-size:clamp(20px,3vw,34px);font-weight:700;letter-spacing:1px;
+    margin:0;text-align:center;min-height:1.2em}
+  .tile{background:#fff;border-radius:18px;padding:12px;
+    box-shadow:0 26px 80px rgba(0,0,0,.55);transition:opacity .5s}
+  .tile img{display:block;max-width:88vw;max-height:66vh;width:auto;height:auto;
+    border-radius:12px}
+  .dots{display:flex;gap:10px}
+  .dot{width:10px;height:10px;border-radius:50%;background:#2a3550;transition:background .3s}
+  .dot.on{background:#5b8cff}
+  .fade{opacity:0}
 </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>RAYMIYO — SALES & COLLECTIONS</h1>
-    <div class="tile">
-      <img src="https://crm.zoho.com/crm/specific/ViewChartImage?width=1000&height=500&embedDetails=b728169baf51b9df65817b179698d7ced9a4d7714650d2b45052e173d09ed7052c96040945876239e70d52b985f9468d094c0df5ea0970923f65e48c5254c7f3ea86cb11023190ae27f999877454f00784574f838e48fdd8a53240027872e6559e394e1733cd71e44ed9628a3e2cc46a" alt="dashboard tile">
-    </div>
+    <p class="brand">RAYMIYO — SALES &amp; COLLECTIONS</p>
+    <h1 class="title" id="title"></h1>
+    <div class="tile"><img id="chart" alt="dashboard tile"></div>
+    <div class="dots" id="dots"></div>
   </div>
+
+<script>
+  // ── Tiles to rotate. Add more later by copying a line. ──
+  const TILES = [
+    {
+      title: "B2C Sales — This Month",
+      url: "https://crm.zoho.com/crm/specific/ViewChartImage?width=1000&height=500&embedDetails=4f21a008487b89ec72fb7af7053b2b7b947b93e3449bf5626c9b865485db39dce00d3d620382d40c4c3314d75b1d39f1dcae43f9913c2013d943372fccc7e525483c12e804950590b71be62c8884c96d65d30c59cafaf16013a02d28ca70130219129f2f9936d53ebf77ffe87e37652d"
+    },
+    {
+      title: "New B2C Customers vs Target",
+      url: "https://crm.zoho.com/crm/specific/ViewChartImage?width=1000&height=500&embedDetails=121253a543b831b67c1ec55db952fec577b7afae95adc3f4a231444b36830a78ae4c8a5205c58cbc5746a8d4c1aa21e81660843d77f3663f4295fe20febfe3d333bf8ef53edd181a68d033be3417c7534c2a9030dcab160f2c6992b82d2f575b6f663ad18fbffd27842743c7de3e4d9d"
+    }
+  ];
+
+  const SECONDS = 20;              // time each tile is shown
+  const img = document.getElementById('chart');
+  const title = document.getElementById('title');
+  const tile = document.querySelector('.tile');
+  const dotsWrap = document.getElementById('dots');
+  let i = 0;
+
+  TILES.forEach(() => {
+    const d = document.createElement('div');
+    d.className = 'dot';
+    dotsWrap.appendChild(d);
+  });
+  const dots = [...dotsWrap.children];
+
+  function show(n){
+    tile.classList.add('fade');
+    title.classList.add('fade');
+    setTimeout(() => {
+      // cache-bust so the chart refreshes its numbers each cycle
+      img.src = TILES[n].url + '&_t=' + Date.now();
+      title.textContent = TILES[n].title;
+      dots.forEach((d,k) => d.classList.toggle('on', k === n));
+      tile.classList.remove('fade');
+      title.classList.remove('fade');
+    }, 500);
+  }
+
+  show(0);
+  if (TILES.length > 1) {
+    setInterval(() => { i = (i + 1) % TILES.length; show(i); }, SECONDS * 1000);
+  }
+
+  // reload the whole page every 30 min to stay fresh long-term
+  setTimeout(() => location.reload(), 30 * 60 * 1000);
+</script>
 </body>
 </html>
