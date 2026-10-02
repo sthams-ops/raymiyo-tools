@@ -8,75 +8,112 @@
   html,body{margin:0;height:100%;background:#0b1120;color:#e6edf7;
     font-family:system-ui,sans-serif;overflow:hidden}
   .wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:22px;padding:3vh 2vw;box-sizing:border-box}
+    justify-content:center;gap:20px;padding:3vh 2vw;box-sizing:border-box}
   .brand{font-size:15px;font-weight:600;letter-spacing:4px;opacity:.45;margin:0}
   .title{font-size:clamp(20px,3vw,34px);font-weight:700;letter-spacing:1px;
     margin:0;text-align:center;min-height:1.2em}
-  .tile{background:#fff;border-radius:18px;padding:12px;
-    box-shadow:0 26px 80px rgba(0,0,0,.55);transition:opacity .5s}
-  .tile img{display:block;max-width:88vw;max-height:66vh;width:auto;height:auto;
-    border-radius:12px}
-  .dots{display:flex;gap:10px}
+  .stage{width:100%;display:flex;align-items:center;justify-content:center;transition:opacity .5s}
+  .stage.fade{opacity:0}
+  .tile{background:#fff;border-radius:18px;padding:12px;box-shadow:0 26px 80px rgba(0,0,0,.55)}
+  .tile img{display:block;max-width:86vw;max-height:64vh;width:auto;height:auto;border-radius:12px}
+  .board{width:92vw;max-width:1500px}
+  .team{display:flex;align-items:baseline;justify-content:center;gap:14px;margin-bottom:18px}
+  .team .lbl{font-size:16px;letter-spacing:2px;opacity:.5;text-transform:uppercase}
+  .team .val{font-size:44px;font-weight:800;color:#5b8cff}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+  .card{background:#111c33;border:1px solid #1e2c4a;border-radius:14px;padding:14px;min-height:22vh}
+  .card h3{margin:0 0 4px;font-size:18px}
+  .card .pct{font-size:13px;opacity:.6;margin-bottom:10px}
+  .card ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+  .card li{font-size:14px;line-height:1.35}
+  .bar{height:6px;border-radius:3px;background:#1e2c4a;margin-top:4px;overflow:hidden}
+  .bar>span{display:block;height:100%;background:#34d399;border-radius:3px}
+  .empty{opacity:.35;font-size:13px}
+  .dots{display:flex;gap:10px;margin-top:6px}
   .dot{width:10px;height:10px;border-radius:50%;background:#2a3550;transition:background .3s}
   .dot.on{background:#5b8cff}
-  .fade{opacity:0}
+  @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
   <div class="wrap">
     <p class="brand">RAYMIYO — SALES &amp; COLLECTIONS</p>
     <h1 class="title" id="title"></h1>
-    <div class="tile"><img id="chart" alt="dashboard tile"></div>
+    <div class="stage" id="stage"></div>
     <div class="dots" id="dots"></div>
   </div>
 
 <script>
-  // ── Tiles to rotate. Add more later by copying a line. ──
-  const TILES = [
-    {
-      title: "B2C Sales — This Month",
-      url: "https://crm.zoho.com/crm/specific/ViewChartImage?width=1000&height=500&embedDetails=4f21a008487b89ec72fb7af7053b2b7b947b93e3449bf5626c9b865485db39dce00d3d620382d40c4c3314d75b1d39f1dcae43f9913c2013d943372fccc7e525483c12e804950590b71be62c8884c96d65d30c59cafaf16013a02d28ca70130219129f2f9936d53ebf77ffe87e37652d"
-    },
-    {
-      title: "New B2C Customers vs Target",
-      url: "https://crm.zoho.com/crm/specific/ViewChartImage?width=1000&height=500&embedDetails=121253a543b831b67c1ec55db952fec577b7afae95adc3f4a231444b36830a78ae4c8a5205c58cbc5746a8d4c1aa21e81660843d77f3663f4295fe20febfe3d333bf8ef53edd181a68d033be3417c7534c2a9030dcab160f2c6992b82d2f575b6f663ad18fbffd27842743c7de3e4d9d"
-    }
+  const CHARTS = [
+    { title: "B2C Sales — This Month",
+      url: "https://crm.zoho.com/crm/specific/ViewChartImage?width=1000&height=500&embedDetails=4f21a008487b89ec72fb7af7053b2b7b947b93e3449bf5626c9b865485db39dce00d3d620382d40c4c3314d75b1d39f1dcae43f9913c2013d943372fccc7e525483c12e804950590b71be62c8884c96d65d30c59cafaf16013a02d28ca70130219129f2f9936d53ebf77ffe87e37652d" },
+    { title: "New B2C Customers vs Target",
+      url: "https://crm.zoho.com/crm/specific/ViewChartImage?width=1000&height=500&embedDetails=121253a543b831b67c1ec55db952fec577b7afae95adc3f4a231444b36830a78ae4c8a5205c58cbc5746a8d4c1aa21e81660843d77f3663f4295fe20febfe3d333bf8ef53edd181a68d033be3417c7534c2a9030dcab160f2c6992b82d2f575b6f663ad18fbffd27842743c7de3e4d9d" }
   ];
 
-  const SECONDS = 20;              // time each tile is shown
-  const img = document.getElementById('chart');
-  const title = document.getElementById('title');
-  const tile = document.querySelector('.tile');
-  const dotsWrap = document.getElementById('dots');
-  let i = 0;
+  const SLIDES = [
+    ...CHARTS.map(c => ({ type: "chart", title: c.title, url: c.url, secs: 20 })),
+    { type: "tasks", title: "This Week's Huddle", secs: 30 }
+  ];
 
-  TILES.forEach(() => {
-    const d = document.createElement('div');
-    d.className = 'dot';
-    dotsWrap.appendChild(d);
-  });
-  const dots = [...dotsWrap.children];
+  const stage = document.getElementById("stage");
+  const title = document.getElementById("title");
+  const dotsWrap = document.getElementById("dots");
+  let idx = 0;
+  let taskData = null;
 
-  function show(n){
-    tile.classList.add('fade');
-    title.classList.add('fade');
-    setTimeout(() => {
-      // cache-bust so the chart refreshes its numbers each cycle
-      img.src = TILES[n].url + '&_t=' + Date.now();
-      title.textContent = TILES[n].title;
-      dots.forEach((d,k) => d.classList.toggle('on', k === n));
-      tile.classList.remove('fade');
-      title.classList.remove('fade');
-    }, 500);
+  SLIDES.forEach(() => { const d=document.createElement("div"); d.className="dot"; dotsWrap.appendChild(d); });
+  const dots=[...dotsWrap.children];
+
+  async function loadTasks(){
+    try{
+      const r = await fetch("/api/tasks");
+      taskData = await r.json();
+    }catch(e){ taskData = { error:true }; }
   }
 
-  show(0);
-  if (TILES.length > 1) {
-    setInterval(() => { i = (i + 1) % TILES.length; show(i); }, SECONDS * 1000);
+  function renderChart(s){
+    stage.innerHTML = `<div class="tile"><img src="${s.url}&_t=${Date.now()}" alt=""></div>`;
   }
 
-  // reload the whole page every 30 min to stay fresh long-term
-  setTimeout(() => location.reload(), 30 * 60 * 1000);
+  function renderTasks(){
+    if(!taskData || taskData.error){
+      stage.innerHTML = `<div class="empty">Could not load tasks right now.</div>`; return;
+    }
+    const cards = taskData.members.map(m=>{
+      const items = m.tasks.length
+        ? m.tasks.map(t=>`<li>${escapeHtml(t.text)}<div class="bar"><span style="width:${t.pct}%"></span></div></li>`).join("")
+        : `<li class="empty">No tasks</li>`;
+      return `<div class="card"><h3>${m.name}</h3><div class="pct">${m.avg}% done</div><ul>${items}</ul></div>`;
+    }).join("");
+    stage.innerHTML = `
+      <div class="board">
+        <div class="team"><span class="lbl">Team Score</span><span class="val">${taskData.teamScore}%</span></div>
+        <div class="grid">${cards}</div>
+      </div>`;
+  }
+
+  function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+  async function show(n){
+    const s = SLIDES[n];
+    stage.classList.add("fade"); title.classList.add("fade");
+    if(s.type==="tasks") await loadTasks();
+    setTimeout(()=>{
+      title.textContent = s.title;
+      if(s.type==="chart") renderChart(s); else renderTasks();
+      dots.forEach((d,k)=>d.classList.toggle("on",k===n));
+      stage.classList.remove("fade"); title.classList.remove("fade");
+    },500);
+  }
+
+  function next(){
+    const wait = SLIDES[idx].secs * 1000;
+    setTimeout(()=>{ idx=(idx+1)%SLIDES.length; show(idx).then(next); }, wait);
+  }
+
+  show(0).then(next);
+  setTimeout(()=>location.reload(), 30*60*1000);
 </script>
 </body>
 </html>
