@@ -1,4 +1,8 @@
 import { useState, useRef } from "react";
+import { motion } from "framer-motion";
+import { Crown, Trophy, AlertTriangle } from "lucide-react";
+import StreakBadge, { ConsistencyChip } from "./StreakBadge.jsx";
+import Celebration, { useCelebrateOnComplete } from "./Celebration.jsx";
 
 const MICRO_QUOTES = {
   high: ["On fire this week 🔥", "Crushing it!", "The team sees you 👏"],
@@ -21,7 +25,7 @@ function ProgressRing({ pct, color, size = 52, stroke = 3 }) {
   );
 }
 
-export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId, onUpdate, weekKey }) {
+export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId, onUpdate, weekKey, stats, isWinner, notStarted }) {
   const [hovered, setHovered] = useState(false);
   const [tooltip, setTooltip] = useState(false);
   const [newTask, setNewTask] = useState("");
@@ -37,6 +41,8 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
   const done = tasks.length > 0
     ? Math.round(tasks.reduce((s, t) => s + (t.pct || 0), 0) / tasks.length)
     : 0;
+  const celebrateRef = useRef(null);
+  useCelebrateOnComplete(done, tasks.length, celebrateRef);
 
   const scoreColor = done >= 80 ? "#34D399" : done >= 50 ? "#FBBF24" : "#F87171";
   const mq = done >= 80 ? MICRO_QUOTES.high : done >= 50 ? MICRO_QUOTES.mid : MICRO_QUOTES.low;
@@ -147,6 +153,11 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
         border: `1px solid rgba(255,255,255,0.07)`,
       }}
     >
+      <Celebration ref={celebrateRef} />
+      {notStarted && (
+        <div style={{ position: "absolute", inset: 0, borderRadius: 20, pointerEvents: "none", zIndex: 5,
+          border: "1px solid rgba(248,113,113,0.65)", animation: "alertPulse 2.2s ease-in-out infinite" }} />
+      )}
       {/* Holographic glow layer */}
       <div style={{
         position: "absolute", inset: 0, borderRadius: 20, pointerEvents: "none",
@@ -191,6 +202,14 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
             }}>
               {member.name[0]}
             </div>
+            {isWinner && (
+              <motion.div title="Winner of last week" animate={{ y: [0, -2, 0] }} transition={{ duration: 2, repeat: Infinity }}
+                style={{ position: "absolute", top: -9, right: -9, zIndex: 3, width: 22, height: 22, borderRadius: "50%",
+                  background: "linear-gradient(135deg,#FDE68A,#F59E0B)", display: "flex", alignItems: "center",
+                  justifyContent: "center", boxShadow: "0 0 14px rgba(251,191,36,0.7)" }}>
+                <Crown size={13} color="#78350F" fill="#78350F" />
+              </motion.div>
+            )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "var(--font-head)", letterSpacing: -0.3 }}>
@@ -202,6 +221,17 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
               border: `1px solid ${member.color}28`, borderRadius: 5, padding: "2px 7px",
               letterSpacing: 0.6, textTransform: "uppercase",
             }}>{member.role}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 6 }}>
+              {isWinner && (
+                <span title="Winner of last week" style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 7px",
+                  borderRadius: 999, fontSize: 10, fontWeight: 800, color: "#FBBF24", background: "rgba(251,191,36,0.12)",
+                  border: "1px solid rgba(251,191,36,0.4)", fontFamily: "var(--font-head)" }}>
+                  <Trophy size={10} /> Winner
+                </span>
+              )}
+              <StreakBadge streak={(stats && stats.streak) || 0} holding={!!(stats && stats.holding)} size="sm" />
+              <ConsistencyChip value={stats ? stats.consistency : null} weeks={(stats && stats.consistencyWeeks) || 0} />
+            </div>
           </div>
           <div style={{
             fontFamily: "var(--font-head)", fontSize: 14, fontWeight: 700,
@@ -218,6 +248,14 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
         {hovered && tasks.length > 0 && (
           <div style={{ fontSize: 11, color: member.light, textAlign: "center", fontStyle: "italic", marginBottom: 10, animation: "fadeIn 0.2s ease" }}>
             {microQuote}
+          </div>
+        )}
+
+        {notStarted && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 10, marginBottom: 10,
+            background: "rgba(248,113,113,0.10)", border: "1px solid rgba(248,113,113,0.35)", color: "#FCA5A5",
+            fontSize: 11, fontWeight: 600 }}>
+            <AlertTriangle size={13} /> Nothing logged yet - move your slider as you work
           </div>
         )}
 

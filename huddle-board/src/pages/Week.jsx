@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../App.jsx";
 import MemberCard from "../components/MemberCard.jsx";
 import QuoteBar from "../components/QuoteBar.jsx";
 import CalendarPicker from "../components/CalendarPicker.jsx";
 import FallingPattern from "../components/FallingPattern.jsx";
+import { getWeekKey, addWeeks, formatWeekRange, nepalWeekday, nepalDayName } from "../lib/weeks.js";
+import { WinnerBanner, NotStartedBanner } from "../components/Highlights.jsx";
 
 const TEAM = [
   { id: "sajina",  name: "Sajina",  role: "CRM / B2B",    color: "#7C3AED", glow: "#7C3AED35", gradient: "linear-gradient(135deg,#7C3AED,#A78BFA)", light: "#A78BFA" },
@@ -22,33 +24,6 @@ const EMAIL_TO_ID = {
   "info@unijoynepal.com":            "krisha",
   "sunil.shrestha@unijoynepal.com":  "sunil",
 };
-
-function getMondayKey(date = new Date()) {
-  const d = new Date(date);
-  const day = d.getDay();
-  d.setDate(d.getDate() - day);
-  return d.toISOString().split("T")[0];
-}
-
-function getPrevWeekKey(weekKey) {
-  const d = new Date(weekKey + "T00:00:00");
-  d.setDate(d.getDate() - 7);
-  return d.toISOString().split("T")[0];
-}
-
-function getNextWeekKey(weekKey) {
-  const d = new Date(weekKey + "T00:00:00");
-  d.setDate(d.getDate() + 7);
-  return d.toISOString().split("T")[0];
-}
-
-function formatWeekRange(weekKey) {
-  const start = new Date(weekKey + "T00:00:00");
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  const o = { month: "short", day: "numeric" };
-  return `${start.toLocaleDateString("en-US", o)} – ${end.toLocaleDateString("en-US", o)}`;
-}
 
 function useCountUp(target, duration = 900) {
   const [val, setVal] = useState(0);
@@ -89,22 +64,48 @@ export default function Week() {
   const [saving, setSaving] = useState(false);
   const [calOpen, setCalOpen] = useState(false);
   const [showPrev, setShowPrev] = useState(false);
+  const [stats, setStats] = useState(null);
+  const savingRef = useRef(false);
+  savingRef.current = saving;
 
   const isAdmin = user?.isAdmin || false;
   const userEmail = (user?.email || "").toLowerCase().trim();
   const currentUserMemberId = EMAIL_TO_ID[userEmail] || null;
 
   console.log("DEBUG auth:", { userEmail, isAdmin, currentUserMemberId });
-  const thisWeek = getMondayKey();
+  const thisWeek = getWeekKey();
   const isThisWeek = weekKey === thisWeek;
-  const prevWeek = getPrevWeekKey(weekKey);
-  const nextWeek = getNextWeekKey(weekKey);
+  const prevWeek = addWeeks(weekKey, -1);
+  const nextWeek = addWeeks(weekKey, 1);
 
   const loadWeek = useCallback(async (wk) => {
     const r = await fetch(`/api/tasks?weekKey=${wk}`);
     const d = await r.json();
     return d.data || {};
   }, []);
+
+  const loadStats = useCallback(async () => {
+    try {
+      const r = await fetch("/api/stats?weekKey=" + weekKey);
+      if (r.ok) setStats(await r.json());
+    } catch (e) { /* stats are optional - the board still works without them */ }
+  }, [weekKey]);
+
+  useEffect(() => { loadStats(); }, [loadStats]);
+
+  // Live refresh every 45s so the office TV (and the confetti) stay current. Skips while saving or tab hidden.
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (document.hidden || savingRef.current) return;
+      try {
+        const fresh = await loadWeek(weekKey);
+        if (savingRef.current) return;
+        setWeekData(fresh);
+      } catch (e) { /* ignore a failed refresh */ }
+      loadStats();
+    }, 45000);
+    return () => clearInterval(id);
+  }, [weekKey, loadWeek, loadStats]);
 
   useEffect(() => {
     setLoading(true);
@@ -141,6 +142,15 @@ export default function Week() {
     ? Math.round(prevAllTasks.reduce((s, t) => s + (t.pct || 0), 0) / prevAllTasks.length)
     : null;
   const prevColor = prevPct !== null ? (prevPct >= 80 ? "#34D399" : prevPct >= 50 ? "#FBBF24" : "#F87171") : null;
+
+  const ALERT_FROM_DAY = 3;
+  const isCurrentWeek = weekKey === thisWeek;
+  const notStartedIds = isCurrentWeek && nepalWeekday() >= ALERT_FROM_DAY
+    ? TEAM.filter((m) => {
+        const t = weekData[m.id] || [];
+        return t.length > 0 && t.every((x) => (x.pct || 0) === 0);
+      }).map((m) => m.id)
+    : [];
 
   return (
     <div style={{
@@ -193,6 +203,9 @@ export default function Week() {
             onClose={() => setCalOpen(false)}
           />
         )}
+
+        <WinnerBanner lastWeek={stats && stats.lastWeek} team={TEAM} teamPct={stats && stats.team ? stats.team.prevWeekPct : null} />
+        <NotStartedBanner people={TEAM.filter((m) => notStartedIds.includes(m.id))} dayLabel={nepalDayName()} />
 
         {/* Last week banner */}
         {prevPct !== null && (
@@ -301,6 +314,10 @@ export default function Week() {
             {TEAM.map((m, i) => (
               <div key={m.id} style={{ animationDelay: `${i * 0.08}s` }}>
                 <MemberCard
+                  key={m.id + "-" + weekKey}
+                  stats={stats && stats.members ? stats.members[m.id] : undefined}
+                  isWinner={!!(stats && stats.lastWeek && stats.lastWeek.winners.includes(m.id))}
+                  notStarted={notStartedIds.includes(m.id)}
                   member={m}
                   tasks={weekData[m.id] || []}
                   isAdmin={isAdmin}

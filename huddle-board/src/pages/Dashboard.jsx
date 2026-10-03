@@ -4,20 +4,10 @@ import { useAuth } from "../App.jsx";
 import { motion, useMotionValue, useTransform } from "framer-motion";
 import CalendarPicker from "../components/CalendarPicker.jsx";
 import AuroraBackground from "../components/AuroraBackground.jsx";
-
-function getMondayKey(date = new Date()) {
-  const d = new Date(date);
-  d.setDate(d.getDate() - d.getDay());
-  return d.toISOString().split("T")[0];
-}
-
-function formatWeekRange(weekKey) {
-  const start = new Date(weekKey + "T00:00:00");
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  const o = { month: "short", day: "numeric" };
-  return `${start.toLocaleDateString("en-US", o)} – ${end.toLocaleDateString("en-US", o)}`;
-}
+import { getWeekKey, formatWeekRange, todayKey } from "../lib/weeks.js";
+import { WinnerBanner } from "../components/Highlights.jsx";
+import Leaderboard from "../components/Leaderboard.jsx";
+import { buildLeaderboard } from "../lib/leaderboard.js";
 
 function useCountUp(target, duration = 900) {
   const [val, setVal] = useState(0);
@@ -153,8 +143,16 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [expandedMonth, setExpandedMonth] = useState(null);
   const [calOpen, setCalOpen] = useState(false);
-  const [selectedWeek, setSelectedWeek] = useState(getMondayKey());
-  const thisWeek = getMondayKey();
+  const [selectedWeek, setSelectedWeek] = useState(getWeekKey());
+  const thisWeek = getWeekKey();
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    fetch("/api/stats?weekKey=" + thisWeek)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setStats(d))
+      .catch(() => {});
+  }, [thisWeek]);
 
   useEffect(() => {
     setLoading(true);
@@ -195,6 +193,12 @@ export default function Dashboard() {
 
   const topPerformer = memberScores[0];
 
+  const [todayYear, todayMonth] = todayKey().split("-").map(Number);
+  const leaderboardEntries = year === todayYear && months.length
+    ? buildLeaderboard(TEAM, months[todayMonth - 1], months[todayMonth - 2] || null, stats && stats.members)
+    : [];
+  const leaderboardMonth = months[todayMonth - 1] ? months[todayMonth - 1].monthLabel + " " + year : "";
+
   const yearBtn = {
     background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
     color: "rgba(255,255,255,0.5)", borderRadius: 8, padding: "6px 12px", fontSize: 12,
@@ -234,6 +238,8 @@ export default function Dashboard() {
             <Clock />
           </div>
         </div>
+
+        <WinnerBanner lastWeek={stats && stats.lastWeek} team={TEAM} teamPct={stats && stats.team ? stats.team.prevWeekPct : null} />
 
         {/* Summary cards row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 14, marginBottom: 24 }}>
@@ -331,6 +337,12 @@ export default function Dashboard() {
             </div>
           </BeamCard>
         </div>
+
+        {!loading && (
+          <BeamCard glowColor="#FBBF24" delay={0.35} style={{ marginBottom: 24 }}>
+            <Leaderboard entries={leaderboardEntries} monthLabel={leaderboardMonth} />
+          </BeamCard>
+        )}
 
         {/* Jump to week */}
         <BeamCard glowColor="#7C3AED" delay={0.4} style={{ marginBottom: 24 }}>
