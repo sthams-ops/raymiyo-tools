@@ -1,11 +1,8 @@
 import { useState } from "react";
+import { weekKeyFor, keyFromYMD, getWeekKey } from "../lib/weeks.js";
 
 function getMondayKey(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = -day;
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().split("T")[0];
+  return weekKeyFor(keyFromYMD(date.getFullYear(), date.getMonth(), date.getDate()));
 }
 
 function getDaysInMonth(year, month) {
@@ -159,7 +156,7 @@ export default function CalendarPicker({ selectedWeek, onSelectWeek, onClose }) 
         {/* Quick nav */}
         <div style={{ marginTop: 16, display: "flex", gap: 8, justifyContent: "center" }}>
           <button
-            onClick={() => { onSelectWeek(getMondayKey(new Date())); onClose(); }}
+            onClick={() => { onSelectWeek(getWeekKey()); onClose(); }}
             style={{
               background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)",
               color: "#A78BFA", borderRadius: 8, padding: "6px 14px", fontSize: 12,
