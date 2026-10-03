@@ -6,7 +6,7 @@ import QuoteBar from "../components/QuoteBar.jsx";
 import CalendarPicker from "../components/CalendarPicker.jsx";
 import FallingPattern from "../components/FallingPattern.jsx";
 import { getWeekKey, addWeeks, formatWeekRange, nepalWeekday, nepalDayName } from "../lib/weeks.js";
-import { WinnerBanner, NotStartedBanner } from "../components/Highlights.jsx";
+import { ChampionBanner, NotStartedBanner } from "../components/Highlights.jsx";
 
 const TEAM = [
   { id: "sajina",  name: "Sajina",  role: "CRM / B2B",    color: "#7C3AED", glow: "#7C3AED35", gradient: "linear-gradient(135deg,#7C3AED,#A78BFA)", light: "#A78BFA" },
@@ -65,6 +65,7 @@ export default function Week() {
   const [calOpen, setCalOpen] = useState(false);
   const [showPrev, setShowPrev] = useState(false);
   const [stats, setStats] = useState(null);
+  const [board, setBoard] = useState(null);
   const savingRef = useRef(false);
   savingRef.current = saving;
 
@@ -91,21 +92,31 @@ export default function Week() {
     } catch (e) { /* stats are optional - the board still works without them */ }
   }, [weekKey]);
 
-  useEffect(() => { loadStats(); }, [loadStats]);
+  const loadBoard = useCallback(async () => {
+    try {
+      const r = await fetch("/api/leaderboard");
+      if (r.ok) setBoard(await r.json());
+    } catch (e) { /* optional - the board works without it */ }
+  }, []);
 
-  // Live refresh every 45s so the office TV (and the confetti) stay current. Skips while saving or tab hidden.
+  useEffect(() => { loadStats(); }, [loadStats]);
+  useEffect(() => { loadBoard(); }, [loadBoard]);
+
+  // Live refresh for the office TV. Task data every 45s; stats + leaderboard about every 5 minutes (keeps the free database quota safe).
   useEffect(() => {
+    let tick = 0;
     const id = setInterval(async () => {
       if (document.hidden || savingRef.current) return;
+      tick += 1;
       try {
         const fresh = await loadWeek(weekKey);
         if (savingRef.current) return;
         setWeekData(fresh);
       } catch (e) { /* ignore a failed refresh */ }
-      loadStats();
+      if (tick % 7 === 0) { loadStats(); loadBoard(); }
     }, 45000);
     return () => clearInterval(id);
-  }, [weekKey, loadWeek, loadStats]);
+  }, [weekKey, loadWeek, loadStats, loadBoard]);
 
   useEffect(() => {
     setLoading(true);
@@ -204,7 +215,7 @@ export default function Week() {
           />
         )}
 
-        <WinnerBanner lastWeek={stats && stats.lastWeek} team={TEAM} teamPct={stats && stats.team ? stats.team.prevWeekPct : null} />
+        <ChampionBanner champion={board && board.latestChampion} team={TEAM} />
         <NotStartedBanner people={TEAM.filter((m) => notStartedIds.includes(m.id))} dayLabel={nepalDayName()} />
 
         {/* Last week banner */}
@@ -316,7 +327,10 @@ export default function Week() {
                 <MemberCard
                   key={m.id + "-" + weekKey}
                   stats={stats && stats.members ? stats.members[m.id] : undefined}
-                  isWinner={!!(stats && stats.lastWeek && stats.lastWeek.winners.includes(m.id))}
+                  isChampion={!!(board && board.latestChampion && board.latestChampion.winners.includes(m.id))}
+                  monthStatus={board && board.byMember ? board.byMember[m.id] : undefined}
+                  monthShort={board && board.month ? board.month.shortLabel : ""}
+                  monthLive={!!(board && board.month && board.month.status === "live")}
                   notStarted={notStartedIds.includes(m.id)}
                   member={m}
                   tasks={weekData[m.id] || []}

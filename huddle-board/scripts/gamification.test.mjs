@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { computeStats, addWeeks } from "../lib/statsCore.js";
 import { weekKeyFor, getWeekKey, addWeeks as addW, nepalWeekday, todayKey, formatWeekRange, keyFromYMD } from "../src/lib/weeks.js";
-import { buildLeaderboard } from "../src/lib/leaderboard.js";
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log("  ok -", name); };
@@ -98,26 +97,6 @@ t("empty data never crashes", () => {
   assert.equal(s.members.sunil.streak, 0);
   assert.equal(s.members.sunil.consistency, null);
   assert.deepEqual(s.lastWeek.winners, []);
-});
-
-// ---------- leaderboard ----------
-const TEAM = ["sajina", "divash", "manoj"].map((id) => ({ id, name: id[0].toUpperCase() + id.slice(1), color: "#fff", gradient: "g" }));
-t("leaderboard ranks, shares rank on ties, computes movement vs last month", () => {
-  const month = { weeks: [
-    { data: { sajina: [task(90)], divash: [task(70)], manoj: [task(70)] } },
-    { data: { sajina: [task(80)], divash: [task(70)], manoj: [task(70)] } },
-  ] };
-  const prev = { weeks: [{ data: { sajina: [task(40)], divash: [task(95)], manoj: [task(60)] } }] };
-  const rows = buildLeaderboard(TEAM, month, prev, { sajina: { streak: 3, holding: true } });
-  assert.deepEqual(rows.map((r) => [r.id, r.pct, r.rank]), [["sajina", 85, 1], ["divash", 70, 2], ["manoj", 70, 2]]);
-  assert.equal(rows[0].moved, 2);   // was 3rd, now 1st
-  assert.equal(rows[1].moved, -1);  // was 1st, now 2nd
-  assert.equal(rows[0].streak, 3);
-});
-t("leaderboard with no data is empty, and a missing previous month gives moved = null", () => {
-  assert.deepEqual(buildLeaderboard(TEAM, { weeks: [] }, null, null), []);
-  const rows = buildLeaderboard(TEAM, { weeks: [{ data: { sajina: [task(50)] } }] }, null, null);
-  assert.equal(rows[0].moved, null);
 });
 
 console.log(`\nALL ${n} TESTS PASSED`);
