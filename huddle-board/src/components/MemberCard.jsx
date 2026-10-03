@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { Crown, Trophy, AlertTriangle } from "lucide-react";
+import MonthChip from "./MonthChip.jsx";
 import StreakBadge, { ConsistencyChip } from "./StreakBadge.jsx";
 import Celebration, { useCelebrateOnComplete } from "./Celebration.jsx";
 
@@ -25,7 +26,7 @@ function ProgressRing({ pct, color, size = 52, stroke = 3 }) {
   );
 }
 
-export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId, onUpdate, weekKey, stats, isWinner, notStarted }) {
+export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId, onUpdate, weekKey, stats, isChampion, monthStatus, monthShort, monthLive, notStarted }) {
   const [hovered, setHovered] = useState(false);
   const [tooltip, setTooltip] = useState(false);
   const [newTask, setNewTask] = useState("");
@@ -202,8 +203,8 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
             }}>
               {member.name[0]}
             </div>
-            {isWinner && (
-              <motion.div title="Winner of last week" animate={{ y: [0, -2, 0] }} transition={{ duration: 2, repeat: Infinity }}
+            {isChampion && (
+              <motion.div title="Monthly champion" animate={{ y: [0, -2, 0] }} transition={{ duration: 2, repeat: Infinity }}
                 style={{ position: "absolute", top: -9, right: -9, zIndex: 3, width: 22, height: 22, borderRadius: "50%",
                   background: "linear-gradient(135deg,#FDE68A,#F59E0B)", display: "flex", alignItems: "center",
                   justifyContent: "center", boxShadow: "0 0 14px rgba(251,191,36,0.7)" }}>
@@ -222,15 +223,16 @@ export default function MemberCard({ member, tasks, isAdmin, currentUserMemberId
               letterSpacing: 0.6, textTransform: "uppercase",
             }}>{member.role}</div>
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 6 }}>
-              {isWinner && (
-                <span title="Winner of last week" style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 7px",
+              {isChampion && (
+                <span title="Monthly champion" style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 7px",
                   borderRadius: 999, fontSize: 10, fontWeight: 800, color: "#FBBF24", background: "rgba(251,191,36,0.12)",
                   border: "1px solid rgba(251,191,36,0.4)", fontFamily: "var(--font-head)" }}>
-                  <Trophy size={10} /> Winner
+                  <Trophy size={10} /> Champion
                 </span>
               )}
               <StreakBadge streak={(stats && stats.streak) || 0} holding={!!(stats && stats.holding)} size="sm" />
               <ConsistencyChip value={stats ? stats.consistency : null} weeks={(stats && stats.consistencyWeeks) || 0} />
+              <MonthChip status={monthStatus} monthShort={monthShort} live={monthLive} />
             </div>
           </div>
           <div style={{

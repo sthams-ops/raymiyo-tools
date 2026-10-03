@@ -4,10 +4,10 @@ import { useAuth } from "../App.jsx";
 import { motion, useMotionValue, useTransform } from "framer-motion";
 import CalendarPicker from "../components/CalendarPicker.jsx";
 import AuroraBackground from "../components/AuroraBackground.jsx";
-import { getWeekKey, formatWeekRange, todayKey } from "../lib/weeks.js";
-import { WinnerBanner } from "../components/Highlights.jsx";
-import Leaderboard from "../components/Leaderboard.jsx";
-import { buildLeaderboard } from "../lib/leaderboard.js";
+import { getWeekKey, formatWeekRange } from "../lib/weeks.js";
+import { ChampionBanner } from "../components/Highlights.jsx";
+import LeaderboardCard from "../components/LeaderboardCard.jsx";
+import ResetPanel from "../components/ResetPanel.jsx";
 
 function useCountUp(target, duration = 900) {
   const [val, setVal] = useState(0);
@@ -146,6 +146,19 @@ export default function Dashboard() {
   const [selectedWeek, setSelectedWeek] = useState(getWeekKey());
   const thisWeek = getWeekKey();
   const [stats, setStats] = useState(null);
+  const [board, setBoard] = useState(null);
+  const [boardMonth, setBoardMonth] = useState(null); // null = the month being played now
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      fetch("/api/leaderboard" + (boardMonth ? "?month=" + boardMonth : ""))
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (alive && d) setBoard(d); })
+        .catch(() => {});
+    load();
+    const id = setInterval(() => { if (!document.hidden) load(); }, 300000); // every 5 minutes
+    return () => { alive = false; clearInterval(id); };
+  }, [boardMonth]);
 
   useEffect(() => {
     fetch("/api/stats?weekKey=" + thisWeek)
@@ -193,12 +206,6 @@ export default function Dashboard() {
 
   const topPerformer = memberScores[0];
 
-  const [todayYear, todayMonth] = todayKey().split("-").map(Number);
-  const leaderboardEntries = year === todayYear && months.length
-    ? buildLeaderboard(TEAM, months[todayMonth - 1], months[todayMonth - 2] || null, stats && stats.members)
-    : [];
-  const leaderboardMonth = months[todayMonth - 1] ? months[todayMonth - 1].monthLabel + " " + year : "";
-
   const yearBtn = {
     background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
     color: "rgba(255,255,255,0.5)", borderRadius: 8, padding: "6px 12px", fontSize: 12,
@@ -239,7 +246,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <WinnerBanner lastWeek={stats && stats.lastWeek} team={TEAM} teamPct={stats && stats.team ? stats.team.prevWeekPct : null} />
+        <ChampionBanner champion={board && board.latestChampion} team={TEAM} />
 
         {/* Summary cards row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 14, marginBottom: 24 }}>
@@ -338,11 +345,18 @@ export default function Dashboard() {
           </BeamCard>
         </div>
 
-        {!loading && (
-          <BeamCard glowColor="#FBBF24" delay={0.35} style={{ marginBottom: 24 }}>
-            <Leaderboard entries={leaderboardEntries} monthLabel={leaderboardMonth} />
-          </BeamCard>
-        )}
+        <BeamCard glowColor="#FBBF24" delay={0.35} style={{ marginBottom: 24 }}>
+          <LeaderboardCard
+            month={board && board.month}
+            months={board ? board.months : []}
+            selected={boardMonth || (board && board.active)}
+            onSelect={(ym) => setBoardMonth(ym === (board && board.active) ? null : ym)}
+            team={TEAM}
+            currentUserId={user && user.memberId}
+            streaks={stats && stats.members}
+            loading={!board}
+          />
+        </BeamCard>
 
         {/* Jump to week */}
         <BeamCard glowColor="#7C3AED" delay={0.4} style={{ marginBottom: 24 }}>
@@ -490,6 +504,8 @@ export default function Dashboard() {
             })}
           </div>
         )}
+
+        {user && user.isAdmin && <ResetPanel />}
       </div>
     </div>
   );

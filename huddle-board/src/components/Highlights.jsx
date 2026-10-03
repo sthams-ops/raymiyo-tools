@@ -1,11 +1,10 @@
 import { motion } from "framer-motion";
 import { Crown, AlertTriangle } from "lucide-react";
-import { formatWeekRange } from "../lib/weeks.js";
 
-// Gold banner: who won the week before the one on screen.
-export function WinnerBanner({ lastWeek, team, teamPct }) {
-  if (!lastWeek || !lastWeek.winners || !lastWeek.winners.length) return null;
-  const winners = lastWeek.winners.map((id) => team.find((m) => m.id === id)).filter(Boolean);
+// Gold banner: the champion of the last DECIDED month.
+export function ChampionBanner({ champion, team }) {
+  if (!champion || !champion.winners || !champion.winners.length) return null;
+  const winners = champion.winners.map((id) => team.find((m) => m.id === id)).filter(Boolean);
   if (!winners.length) return null;
   return (
     <motion.div
@@ -38,7 +37,7 @@ export function WinnerBanner({ lastWeek, team, teamPct }) {
       </motion.div>
       <div style={{ position: "relative" }}>
         <div style={{ fontSize: 10, letterSpacing: 2.5, color: "rgba(251,191,36,0.85)", textTransform: "uppercase", fontWeight: 700 }}>
-          Winner{winners.length > 1 ? "s" : ""} of last week &middot; {formatWeekRange(lastWeek.weekKey)}
+          Champion{winners.length > 1 ? "s" : ""} of {champion.label}
         </div>
         <div style={{ fontFamily: "var(--font-head)", fontSize: 22, fontWeight: 800, letterSpacing: -0.4, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
           <span>
@@ -49,15 +48,12 @@ export function WinnerBanner({ lastWeek, team, teamPct }) {
               </span>
             ))}
           </span>
-          <span style={{ color: "#FBBF24" }}>{lastWeek.pct}%</span>
+          <span style={{ color: "#FBBF24" }}>{Number.isInteger(champion.score) ? `${champion.score}%` : `${champion.score.toFixed(1)}%`}</span>
         </div>
       </div>
-      {teamPct !== null && teamPct !== undefined && (
-        <div style={{ marginLeft: "auto", position: "relative", textAlign: "right" }}>
-          <div style={{ fontSize: 10, letterSpacing: 2, color: "rgba(255,255,255,0.35)", textTransform: "uppercase" }}>Team finished</div>
-          <div style={{ fontFamily: "var(--font-head)", fontSize: 20, fontWeight: 800, color: teamPct >= 80 ? "#34D399" : teamPct >= 50 ? "#FBBF24" : "#F87171" }}>{teamPct}%</div>
-        </div>
-      )}
+      <div style={{ marginLeft: "auto", position: "relative", textAlign: "right", fontSize: 11, color: "rgba(255,255,255,0.4)" }}>
+        Month&apos;s completion score &middot; locked
+      </div>
     </motion.div>
   );
 }
