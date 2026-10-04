@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import { assemble, isValidMonth, weeksOfMonth, addMonths, activeMonth, nepalToday, LOOKBACK_MONTHS } from "../lib/monthly.js";
+import { assemble, isValidMonth, monthWeekKeys, isCurrentRecord, addMonths, activeMonth, nepalToday, LOOKBACK_MONTHS } from "../lib/monthly.js";
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -37,13 +37,18 @@ export default async function handler(req, res) {
     const list = [];
     for (let i = 0; i < LOOKBACK_MONTHS; i++) list.push(addMonths(activeMonth(today), -i));
 
-    // 1) already-decided months
+    // 1) already-decided months (results saved under older rules are ignored and recomputed)
     const recRaw = await redis.mget(...list.map((ym) => `huddle:champion:${ym}`));
     const records = {};
-    list.forEach((ym, i) => { const r = parse(recRaw[i]); if (r) records[ym] = r; });
+    const outdated = {};
+    list.forEach((ym, i) => {
+      const r = parse(recRaw[i]);
+      if (isCurrentRecord(r)) records[ym] = r;
+      else if (r) outdated[ym] = true;
+    });
 
     // 2) raw weeks only for months that are not decided yet
-    const weekKeys = [...new Set(list.filter((ym) => !records[ym]).flatMap(weeksOfMonth))];
+    const weekKeys = [...new Set(list.filter((ym) => !records[ym]).flatMap(monthWeekKeys))];
     const weeksByKey = {};
     if (weekKeys.length) {
       const raws = await redis.mget(...weekKeys.map((k) => `huddle:week:${k}`));
@@ -53,9 +58,12 @@ export default async function handler(req, res) {
     const out = assemble({ today, requested, weeksByKey, records });
     if (!out) return res.status(400).json({ error: "Month is outside the last 12 months" });
 
-    // 3) lock in months that have just closed (NX = never overwrite an existing result)
+    // 3) lock in months that have just closed. NX = never overwrite a current result; only an
+    //    older-rules leftover is replaced.
     for (const f of out.toFinalize) {
-      await redis.set(`huddle:champion:${f.ym}`, JSON.stringify(f.record), { nx: true });
+      const key = `huddle:champion:${f.ym}`;
+      if (outdated[f.ym]) await redis.set(key, JSON.stringify(f.record));
+      else await redis.set(key, JSON.stringify(f.record), { nx: true });
     }
     delete out.toFinalize;
     return res.json(out);
