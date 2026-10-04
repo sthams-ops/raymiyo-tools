@@ -11,9 +11,9 @@
     justify-content:center;gap:20px;padding:3vh 2vw;box-sizing:border-box}
   .brand{font-size:15px;font-weight:600;letter-spacing:4px;opacity:.45;margin:0}
   .title{font-size:clamp(20px,3vw,34px);font-weight:700;letter-spacing:1px;
-    margin:0;text-align:center;min-height:1.2em}
+    margin:0;text-align:center;min-height:1.2em;transition:opacity .5s}
   .stage{width:100%;display:flex;align-items:center;justify-content:center;transition:opacity .5s}
-  .stage.fade{opacity:0}
+  .fade{opacity:0}
   .tile{background:#fff;border-radius:18px;padding:12px;box-shadow:0 26px 80px rgba(0,0,0,.55)}
   .tile img{display:block;max-width:86vw;max-height:64vh;width:auto;height:auto;border-radius:12px}
   .board{width:92vw;max-width:1500px}
@@ -28,8 +28,8 @@
   .card li{font-size:14px;line-height:1.35}
   .bar{height:6px;border-radius:3px;background:#1e2c4a;margin-top:4px;overflow:hidden}
   .bar>span{display:block;height:100%;background:#34d399;border-radius:3px}
-  .empty{opacity:.35;font-size:13px}
-  .dots{display:flex;gap:10px;margin-top:6px}
+  .empty{opacity:.4;font-size:15px}
+  .dots{display:flex;gap:10px;margin-top:6px;min-height:10px}
   .dot{width:10px;height:10px;border-radius:50%;background:#2a3550;transition:background .3s}
   .dot.on{background:#5b8cff}
   @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
@@ -44,76 +44,147 @@
   </div>
 
 <script>
-  const CHARTS = [
-    { title: "B2C Sales — This Month",
-      url: "https://crm.zoho.com/crm/specific/ViewChartImage?width=1000&height=500&embedDetails=4f21a008487b89ec72fb7af7053b2b7b947b93e3449bf5626c9b865485db39dce00d3d620382d40c4c3314d75b1d39f1dcae43f9913c2013d943372fccc7e525483c12e804950590b71be62c8884c96d65d30c59cafaf16013a02d28ca70130219129f2f9936d53ebf77ffe87e37652d" },
-    { title: "New B2C Customers vs Target",
-      url: "https://crm.zoho.com/crm/specific/ViewChartImage?width=1000&height=500&embedDetails=121253a543b831b67c1ec55db952fec577b7afae95adc3f4a231444b36830a78ae4c8a5205c58cbc5746a8d4c1aa21e81660843d77f3663f4295fe20febfe3d333bf8ef53edd181a68d033be3417c7534c2a9030dcab160f2c6992b82d2f575b6f663ad18fbffd27842743c7de3e4d9d" }
-  ];
-
-  const SLIDES = [
-    ...CHARTS.map(c => ({ type: "chart", title: c.title, url: c.url, secs: 20 })),
-    { type: "tasks", title: "This Week's Huddle", secs: 30 }
+(function(){
+  // Used only if the playlist can't be loaded and nothing is cached yet.
+  const DEFAULT_TILES = [
+    { id:"b2c-sales", type:"chart", title:"B2C Sales — This Month", secs:20, on:true,
+      url:"https://crm.zoho.com/crm/specific/ViewChartImage?width=1000&height=500&embedDetails=4f21a008487b89ec72fb7af7053b2b7b947b93e3449bf5626c9b865485db39dce00d3d620382d40c4c3314d75b1d39f1dcae43f9913c2013d943372fccc7e525483c12e804950590b71be62c8884c96d65d30c59cafaf16013a02d28ca70130219129f2f9936d53ebf77ffe87e37652d" },
+    { id:"new-b2c-vs-target", type:"chart", title:"New B2C Customers vs Target", secs:20, on:true,
+      url:"https://crm.zoho.com/crm/specific/ViewChartImage?width=1000&height=500&embedDetails=121253a543b831b67c1ec55db952fec577b7afae95adc3f4a231444b36830a78ae4c8a5205c58cbc5746a8d4c1aa21e81660843d77f3663f4295fe20febfe3d333bf8ef53edd181a68d033be3417c7534c2a9030dcab160f2c6992b82d2f575b6f663ad18fbffd27842743c7de3e4d9d" },
+    { id:"huddle-tasks", type:"tasks", title:"This Week's Huddle", secs:30, on:true }
   ];
 
   const stage = document.getElementById("stage");
-  const title = document.getElementById("title");
-  const dotsWrap = document.getElementById("dots");
-  let idx = 0;
-  let taskData = null;
+  const titleEl = document.getElementById("title");
+  const dotsEl = document.getElementById("dots");
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-  SLIDES.forEach(() => { const d=document.createElement("div"); d.className="dot"; dotsWrap.appendChild(d); });
-  const dots=[...dotsWrap.children];
+  function h(tag, cls, text){
+    const e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(text !== undefined) e.textContent = text;
+    return e;
+  }
 
-  async function loadTasks(){
+  async function fetchTiles(){
     try{
-      const r = await fetch("/api/tasks");
-      taskData = await r.json();
-    }catch(e){ taskData = { error:true }; }
+      const r = await fetch("/api/tiles", { cache:"no-store" });
+      if(!r.ok) throw new Error("bad status");
+      const d = await r.json();
+      if(Array.isArray(d.tiles)){
+        try{ localStorage.setItem("tvTiles", JSON.stringify(d.tiles)); }catch(e){}
+        return d.tiles;
+      }
+    }catch(e){}
+    try{
+      const c = JSON.parse(localStorage.getItem("tvTiles") || "null");
+      if(Array.isArray(c)) return c;
+    }catch(e){}
+    return DEFAULT_TILES;
   }
 
-  function renderChart(s){
-    stage.innerHTML = `<div class="tile"><img src="${s.url}&_t=${Date.now()}" alt=""></div>`;
+  async function fetchTasks(){
+    try{
+      const r = await fetch("/api/tasks", { cache:"no-store" });
+      if(!r.ok) return null;
+      const d = await r.json();
+      return d && Array.isArray(d.members) ? d : null;
+    }catch(e){ return null; }
   }
 
-  function renderTasks(){
-    if(!taskData || taskData.error){
-      stage.innerHTML = `<div class="empty">Could not load tasks right now.</div>`; return;
+  function renderChart(tile){
+    stage.textContent = "";
+    const wrap = h("div", "tile");
+    const img = new Image();
+    img.alt = "";
+    const sep = tile.url.indexOf("?") === -1 ? "?" : "&";
+    img.src = tile.url + sep + "_t=" + Date.now();   // fresh numbers every showing
+    wrap.appendChild(img);
+    stage.appendChild(wrap);
+  }
+
+  function renderTasks(d){
+    stage.textContent = "";
+    const board = h("div", "board");
+    const team = h("div", "team");
+    team.appendChild(h("span", "lbl", "Team Score"));
+    team.appendChild(h("span", "val", d.teamScore + "%"));
+    board.appendChild(team);
+    const grid = h("div", "grid");
+    d.members.forEach(m => {
+      const card = h("div", "card");
+      card.appendChild(h("h3", "", m.name));
+      card.appendChild(h("div", "pct", m.avg + "% done"));
+      const ul = h("ul");
+      if(m.tasks.length){
+        m.tasks.forEach(t => {
+          const li = h("li", "", t.text);
+          const bar = h("div", "bar");
+          const fill = document.createElement("span");
+          fill.style.width = Math.max(0, Math.min(100, t.pct)) + "%";
+          bar.appendChild(fill);
+          li.appendChild(bar);
+          ul.appendChild(li);
+        });
+      } else {
+        ul.appendChild(h("li", "empty", "No tasks"));
+      }
+      card.appendChild(ul);
+      grid.appendChild(card);
+    });
+    board.appendChild(grid);
+    stage.appendChild(board);
+  }
+
+  function showMessage(text){
+    titleEl.textContent = "";
+    stage.textContent = "";
+    stage.appendChild(h("div", "empty", text));
+    dotsEl.textContent = "";
+  }
+
+  function buildDots(n){
+    dotsEl.textContent = "";
+    for(let i = 0; i < n; i++) dotsEl.appendChild(h("div", "dot"));
+  }
+
+  async function swapTo(render, title, index){
+    stage.classList.add("fade"); titleEl.classList.add("fade");
+    await sleep(500);
+    titleEl.textContent = title || "";
+    render();
+    [...dotsEl.children].forEach((d, k) => d.classList.toggle("on", k === index));
+    stage.classList.remove("fade"); titleEl.classList.remove("fade");
+  }
+
+  async function main(){
+    while(true){
+      const tiles = (await fetchTiles()).filter(t => t && t.on !== false);
+      const wantsTasks = tiles.some(t => t.type === "tasks");
+      const tasks = wantsTasks ? await fetchTasks() : null;
+      const hasTasks = !!(tasks && tasks.members.some(m => m.tasks && m.tasks.length));
+      // skip the task slide when nobody has tasks (or the feed is unreachable)
+      const playlist = tiles.filter(t => t.type !== "tasks" || hasTasks);
+
+      if(!playlist.length){
+        showMessage("Nothing to show yet — add a tile in /admin");
+        await sleep(30000);
+        continue;
+      }
+
+      buildDots(playlist.length);
+      for(let i = 0; i < playlist.length; i++){
+        const t = playlist[i];
+        if(t.type === "tasks") await swapTo(() => renderTasks(tasks), t.title, i);
+        else await swapTo(() => renderChart(t), t.title, i);
+        await sleep((Number(t.secs) || 20) * 1000);
+      }
     }
-    const cards = taskData.members.map(m=>{
-      const items = m.tasks.length
-        ? m.tasks.map(t=>`<li>${escapeHtml(t.text)}<div class="bar"><span style="width:${t.pct}%"></span></div></li>`).join("")
-        : `<li class="empty">No tasks</li>`;
-      return `<div class="card"><h3>${m.name}</h3><div class="pct">${m.avg}% done</div><ul>${items}</ul></div>`;
-    }).join("");
-    stage.innerHTML = `
-      <div class="board">
-        <div class="team"><span class="lbl">Team Score</span><span class="val">${taskData.teamScore}%</span></div>
-        <div class="grid">${cards}</div>
-      </div>`;
   }
 
-  function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
-
-  async function show(n){
-    const s = SLIDES[n];
-    stage.classList.add("fade"); title.classList.add("fade");
-    if(s.type==="tasks") await loadTasks();
-    setTimeout(()=>{
-      title.textContent = s.title;
-      if(s.type==="chart") renderChart(s); else renderTasks();
-      dots.forEach((d,k)=>d.classList.toggle("on",k===n));
-      stage.classList.remove("fade"); title.classList.remove("fade");
-    },500);
-  }
-
-  function next(){
-    const wait = SLIDES[idx].secs * 1000;
-    setTimeout(()=>{ idx=(idx+1)%SLIDES.length; show(idx).then(next); }, wait);
-  }
-
-  show(0).then(next);
-  setTimeout(()=>location.reload(), 30*60*1000);
+  main();
+  setTimeout(() => location.reload(), 6 * 60 * 60 * 1000); // fresh start every 6 hours
+})();
 </script>
 </body>
 </html>
