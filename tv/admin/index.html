@@ -70,6 +70,11 @@
 
     <div class="bar">
       <button id="addBtn">+ Add chart tile</button>
+      <select id="metricSel" style="background:#0b1120;color:#e6edf7;border:1px solid #2a3a5e;border-radius:8px;padding:9px 10px;font-size:14px">
+        <option value="sales">B2C sales this month</option>
+        <option value="customers">New B2C customers vs target</option>
+      </select>
+      <button id="addMetricBtn">+ Add live CRM tile</button>
       <button id="saveBtn" class="primary">Save changes</button>
       <a href="/" target="_blank" style="color:#8fb0ff;font-size:14px">Open TV page ↗</a>
       <span id="msg" class="msg"></span>
@@ -138,7 +143,7 @@
 
       const badge = document.createElement("span");
       badge.className = "badge";
-      badge.textContent = t.type === "tasks" ? "Task board" : "Chart";
+      badge.textContent = t.type === "tasks" ? "Task board" : t.type === "metric" ? "Live CRM" : "Chart";
       top.appendChild(badge);
 
       const spacer = document.createElement("span"); spacer.style.flex = "1"; top.appendChild(spacer);
@@ -171,7 +176,12 @@
       f2.appendChild(se); fields.appendChild(f2);
       card.appendChild(fields);
 
-      if(t.type !== "tasks"){
+      if(t.type === "metric"){
+        const n = document.createElement("p");
+        n.className = "sub"; n.style.margin = "10px 0 0";
+        n.textContent = (t.metric === "customers" ? "New B2C customers against the monthly target" : "B2C sales this month against last month") + ". Numbers come straight from the CRM and refresh on their own.";
+        card.appendChild(n);
+      } else if(t.type !== "tasks"){
         const u = document.createElement("div"); u.style.marginTop = "10px";
         u.innerHTML = '<label class="small">Embed URL (from Zoho Analytics)</label>';
         const ui = document.createElement("input"); ui.type = "text"; ui.value = t.url || "";
@@ -196,6 +206,13 @@
 
   $("addBtn").addEventListener("click", () => {
     tiles.push({ id: "t" + Date.now(), type:"chart", title:"", secs:20, on:true, url:"" });
+    render();
+    window.scrollTo(0, document.body.scrollHeight);
+  });
+
+  $("addMetricBtn").addEventListener("click", () => {
+    const m = $("metricSel").value;
+    tiles.push({ id: "m" + Date.now(), type:"metric", metric:m, title: m === "customers" ? "New B2C Customers vs Target" : "B2C Sales — This Month", secs:20, on:true });
     render();
     window.scrollTo(0, document.body.scrollHeight);
   });
