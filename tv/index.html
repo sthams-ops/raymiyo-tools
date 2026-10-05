@@ -120,6 +120,53 @@
   .tl.on{border-color:rgba(255,255,255,.55);box-shadow:0 0 24px rgba(124,140,255,.45)}
   .tl.on .lbl{color:#fff}
 
+
+  /* live CRM tiles */
+  .mrow{display:flex;gap:26px;flex:1;min-height:0;padding-bottom:8px;margin-top:10px}
+  .mcol{display:flex;flex-direction:column;gap:26px;min-height:0}
+  .cardg{border-radius:28px;padding:26px 34px;min-height:0;position:relative;overflow:hidden;
+    background:linear-gradient(145deg,rgba(255,255,255,.12),rgba(255,255,255,.04));
+    border:1px solid var(--rim);box-shadow:inset 0 1px 0 rgba(255,255,255,.20),0 22px 44px rgba(2,6,30,.42)}
+  .kpi{--sq:1300px;--fill:linear-gradient(145deg,#161F63,#0A113C);border-radius:28px;padding:28px 38px;flex:1.3;min-height:0;box-shadow:0 26px 60px rgba(2,6,30,.55)}
+  .k-label{font-size:30px;font-weight:600;color:#B7C3EA}
+  .k-num{display:flex;align-items:baseline;gap:14px;margin-top:10px;font-family:var(--display);font-weight:800;line-height:.9}
+  .k-cur{font-size:46px;color:#B7C3EA;font-weight:700}
+  .k-amt{display:inline-flex;align-items:baseline}
+  .k-dec{font-family:var(--display);font-weight:700;font-size:56px;color:#B7C3EA;margin-left:4px}
+  .k-val{font-size:128px;font-variant-numeric:tabular-nums;
+    background:linear-gradient(180deg,#FFFFFF 30%,#B9C4FF 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+  .k-pill{display:inline-flex;align-items:center;gap:12px;margin-top:16px;padding:8px 22px;border-radius:40px;font-family:var(--display);font-weight:700;font-size:40px;line-height:1.1}
+  .k-pill.down{background:rgba(255,107,94,.16);color:var(--coral);border:1px solid rgba(255,107,94,.45)}
+  .k-pill.up{background:rgba(47,214,160,.16);color:var(--mint);border:1px solid rgba(47,214,160,.45)}
+  .k-sub{font-size:26px;font-weight:500;color:#B7C3EA;margin-top:12px;line-height:1.3}
+  .p-title{font-size:28px;font-weight:600;color:var(--ink2)}
+  .p-val{font-family:var(--display);font-weight:800;font-size:64px;line-height:1;margin-top:8px;font-variant-numeric:tabular-nums}
+  .p-note{font-size:26px;font-weight:500;color:var(--ink2);margin-top:10px}
+  .p-delta{font-family:var(--display);font-weight:700;font-size:42px}
+  .p-delta.down{color:var(--coral)} .p-delta.up{color:var(--mint)}
+  .daybar{height:14px;border-radius:7px;background:var(--track);margin-top:16px;overflow:hidden}
+  .daybar>span{display:block;height:100%;border-radius:7px;background:linear-gradient(90deg,#4CC9F0,#7C8CFF)}
+  .legend{display:flex;gap:34px;font-size:26px;font-weight:600;color:var(--ink2);margin-bottom:6px}
+  .legend i{display:inline-block;width:34px;height:8px;border-radius:4px;margin-right:12px;vertical-align:middle}
+  .chart-svg{display:block;width:100%}
+  .chart-svg text{font-family:var(--body);fill:#A9B6DB}
+  .gauge-card{--sq:1500px;--fill:linear-gradient(145deg,#161F63,#0A113C);border-radius:28px;width:800px;flex:none;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 26px 60px rgba(2,6,30,.55)}
+  .gauge{position:relative;width:560px;height:560px}
+  .gauge svg{position:absolute;left:0;top:0;width:560px;height:560px}
+  .g-center{position:absolute;left:0;top:0;width:560px;height:560px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding-bottom:20px}
+  .g-num{font-family:var(--display);font-weight:800;font-size:220px;line-height:.85;font-variant-numeric:tabular-nums;
+    background:linear-gradient(180deg,#FFFFFF 30%,#B9C4FF 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+  .g-of{font-family:var(--display);font-weight:700;font-size:56px;color:#B7C3EA;margin-top:10px}
+  .g-lbl{font-size:28px;font-weight:500;color:#B7C3EA;margin-top:6px}
+  .g-pill{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);padding:8px 26px;border-radius:40px;font-family:var(--display);font-weight:700;font-size:42px;
+    background:rgba(255,194,75,.16);color:var(--amber);border:1px solid rgba(255,194,75,.45);white-space:nowrap}
+  .g-pill.win{background:rgba(47,214,160,.16);color:var(--mint);border-color:rgba(47,214,160,.45)}
+  .stat-row{display:flex;gap:26px}
+  .stat{flex:1}
+  .stat .s-val{font-family:var(--display);font-weight:800;font-size:110px;line-height:.95;font-variant-numeric:tabular-nums}
+  .stat .s-lbl{font-size:28px;font-weight:500;color:var(--ink2);margin-top:8px}
+
   body.idle,body.idle *{cursor:none}
   @media (prefers-reduced-motion: reduce){ .stage,.ring .arc{transition:none} .shine::before{animation:none} }
 </style>
@@ -236,12 +283,13 @@
     const b = new Date(a.getTime() + 6 * 86400000);
     return MONTHS[a.getUTCMonth()] + " " + a.getUTCDate() + " – " + MONTHS[b.getUTCMonth()] + " " + b.getUTCDate();
   }
-  function countUp(el, to){
-    if(reduceMotion || to <= 0){ el.textContent = to + "%"; return; }
+  function countUp(el, to, plain){
+    const fmt = v => plain === true ? String(v) : plain === false ? inr(v, false) : v + "%";
+    if(reduceMotion || to <= 0){ el.textContent = fmt(to); return; }
     const steps = 24;
-    el.textContent = "0%";
+    el.textContent = fmt(0);
     for(let i = 1; i <= steps; i++){
-      setTimeout(() => { el.textContent = Math.round(to * (1 - Math.pow(1 - i / steps, 3))) + "%"; }, i * 45);
+      setTimeout(() => { el.textContent = fmt(Math.round(to * (1 - Math.pow(1 - i / steps, 3)))); }, i * 45);
     }
   }
 
@@ -390,6 +438,242 @@
     setTimeout(() => arcs.forEach(a => a.arc.setAttribute("stroke-dashoffset", a.off.toFixed(1))), 60);
   }
 
+
+  // ── number formatting in the Nepali/Indian style the CRM dashboard uses (3,17,879.75) ──
+  function inr(n, dec){
+    const neg = n < 0; n = Math.abs(Number(n) || 0);
+    const parts = (dec ? n.toFixed(2) : String(Math.round(n))).split(".");
+    let i = parts[0], f = parts[1];
+    let last3 = i.slice(-3), rest = i.slice(0, -3);
+    if(rest) last3 = "," + last3;
+    rest = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ",");
+    return (neg ? "-" : "") + rest + last3 + (f ? "." + f : "");
+  }
+  function shortMoney(n){
+    if(n >= 100000){ const v = n / 100000; return (v % 1 ? v.toFixed(1) : String(v)) + "L"; }
+    if(n >= 1000){ const v = n / 1000; return (v % 1 ? v.toFixed(1) : String(v)) + "K"; }
+    return String(n);
+  }
+  // round-number axis: e.g. 3,17,880 becomes 0, 1L, 2L, 3L, 4L
+  function niceScale(max){
+    if(!(max > 0)) return { top:1000, step:250 };
+    const raw = max / 4, p = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), f = raw / p;
+    const step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+    return { top: Math.ceil(max / step) * step, step };
+  }
+  function timeText(iso){
+    try{
+      const t = new Intl.DateTimeFormat("en-GB", { timeZone:"Asia/Kathmandu", hour:"numeric", minute:"2-digit", hour12:true }).format(new Date(iso));
+      return t.replace(/\s?([ap]m)/i, " $1").toLowerCase();
+    }catch(e){ return ""; }
+  }
+  async function fetchMetrics(){
+    try{
+      const r = await fetch("/api/metrics", { cache:"no-store" });
+      if(!r.ok) return null;
+      const d = await r.json();
+      return d && d.sales ? d : null;
+    }catch(e){ return null; }
+  }
+
+  function metricHead(tile, m){
+    const head = h("div", "head");
+    head.appendChild(h("h1", "slide-title", tile.title || ""));
+    const when = m.asOf ? timeText(m.asOf) : "";
+    head.appendChild(h("div", "slide-meta", m.stale ? "Last saved numbers, CRM not reachable" : (when ? "Zoho CRM data, updated " + when : "Zoho CRM data")));
+    return head;
+  }
+
+  function lineChart(sales){
+    const W = 1080, H = 560, L = 96, R = 30, T = 24, B = 62;
+    const iw = W - L - R, ih = H - T - B;
+    const days = Math.max(sales.daysInMonth, sales.daysInPrevMonth);
+    const sc = niceScale(Math.max(sales.prevTotal, sales.total, 1));
+    const top = sc.top;
+    const x = d => L + (days === 1 ? 0 : (d - 1) / (days - 1) * iw);
+    const y = v => T + ih - (v / top) * ih;
+    const svgEl = svg("svg", { "class":"chart-svg", viewBox:"0 0 " + W + " " + H });
+    const defs = svg("defs", {});
+    const g1 = svg("linearGradient", { id:"gCur", x1:"0", y1:"0", x2:"1", y2:"0" });
+    g1.appendChild(svg("stop", { offset:"0", "stop-color":"#4CC9F0" })); g1.appendChild(svg("stop", { offset:"1", "stop-color":"#2FD6A0" }));
+    const g2 = svg("linearGradient", { id:"gArea", x1:"0", y1:"0", x2:"0", y2:"1" });
+    g2.appendChild(svg("stop", { offset:"0", "stop-color":"#4CC9F0", "stop-opacity":".38" })); g2.appendChild(svg("stop", { offset:"1", "stop-color":"#4CC9F0", "stop-opacity":"0" }));
+    defs.appendChild(g1); defs.appendChild(g2); svgEl.appendChild(defs);
+
+    // grid + y labels
+    const ticks = Math.round(top / sc.step);
+    for(let i = 0; i <= ticks; i++){
+      const v = sc.step * i, yy = y(v);
+      svgEl.appendChild(svg("line", { x1:L, x2:W - R, y1:yy, y2:yy, stroke:"rgba(255,255,255,.12)", "stroke-width":2 }));
+      const t = svg("text", { x:L - 16, y:yy + 10, "text-anchor":"end", "font-size":26 }); t.textContent = shortMoney(v); svgEl.appendChild(t);
+    }
+    // x labels
+    [1, 5, 10, 15, 20, 25, 30].forEach(d => {
+      if(d > days) return;
+      const t = svg("text", { x:x(d), y:H - 18, "text-anchor":"middle", "font-size":26 }); t.textContent = String(d); svgEl.appendChild(t);
+    });
+
+    function pathOf(arr){
+      let dstr = "", started = false;
+      arr.forEach((v, i) => { if(v === null || v === undefined) return; dstr += (started ? " L" : "M") + x(i + 1).toFixed(1) + " " + y(v).toFixed(1); started = true; });
+      return dstr;
+    }
+    // last month (soft)
+    svgEl.appendChild(svg("path", { d:pathOf(sales.prevCum), fill:"none", stroke:"#7C8CFF", "stroke-opacity":".6", "stroke-width":6, "stroke-linecap":"round", "stroke-linejoin":"round" }));
+    // this month: area + line
+    const cur = sales.cum.filter(v => v !== null && v !== undefined);
+    const lastDay = cur.length;
+    if(lastDay > 0){
+      const line = pathOf(sales.cum);
+      svgEl.appendChild(svg("path", { d: line + " L" + x(lastDay).toFixed(1) + " " + y(0).toFixed(1) + " L" + x(1).toFixed(1) + " " + y(0).toFixed(1) + " Z", fill:"url(#gArea)", stroke:"none" }));
+      const p = svg("path", { d:line, fill:"none", stroke:"url(#gCur)", "stroke-width":9, "stroke-linecap":"round", "stroke-linejoin":"round" });
+      svgEl.appendChild(p);
+      try{ const len = p.getTotalLength(); if(len && !reduceMotion){ p.setAttribute("stroke-dasharray", len); p.setAttribute("stroke-dashoffset", len); p.style.transition = "stroke-dashoffset 1.4s ease-out"; setTimeout(() => p.setAttribute("stroke-dashoffset", 0), 80); } }catch(e){}
+      const ex = x(lastDay), ey = y(cur[lastDay - 1]);
+      svgEl.appendChild(svg("circle", { cx:ex, cy:ey, r:20, fill:"#4CC9F0", "fill-opacity":".28" }));
+      svgEl.appendChild(svg("circle", { cx:ex, cy:ey, r:11, fill:"#FFFFFF" }));
+    }
+    return svgEl;
+  }
+
+  function renderSales(tile, m){
+    const s = m.sales;
+    stage.textContent = "";
+    stage.appendChild(metricHead(tile, m));
+    const row = h("div", "mrow");
+
+    const left = h("div", "mcol"); left.style.width = "680px"; left.style.flex = "none";
+    const kpi = h("div", "kpi shine");
+    kpi.appendChild(h("div", "k-label", "B2C invoices, 1 to " + s.today + " " + s.monthName));
+    const num = h("div", "k-num");
+    num.appendChild(h("span", "k-cur", "NPR"));
+    // exact CRM amount: whole rupees count up, the paisa are shown as they are in the CRM
+    const fixed = Number(s.total).toFixed(2).split(".");
+    const amt = h("span", "k-amt");
+    const val = h("span", "k-val", inr(Number(fixed[0]), false));
+    amt.appendChild(val); amt.appendChild(h("span", "k-dec", "." + fixed[1]));
+    num.appendChild(amt); kpi.appendChild(num);
+    if(s.changePct !== null){
+      const down = s.changePct < 0;
+      kpi.appendChild(h("div", "k-pill " + (down ? "down" : "up"), (down ? "▼ " : "▲ ") + Math.abs(s.changePct).toFixed(1) + "% vs " + s.prevMonthName));
+    }
+    kpi.appendChild(h("div", "k-sub", s.count + " invoices so far"));
+    kpi.appendChild(h("div", "k-sub", s.prevMonthName + ": NPR " + inr(s.prevTotal, true) + " from " + s.prevCount + " invoices"));
+    left.appendChild(kpi);
+
+    const pace = h("div", "cardg"); pace.style.flex = "1";
+    pace.appendChild(h("div", "p-title", "Same days last month (1 to " + s.today + ")"));
+    pace.appendChild(h("div", "p-val", s.sameDaysLast === null ? "-" : "NPR " + inr(s.sameDaysLast, true)));
+    if(s.paceChangePct !== null){
+      const dn = s.paceChangePct < 0;
+      const note = h("div", "p-note");
+      const dl = h("span", "p-delta " + (dn ? "down" : "up"), (dn ? "▼ " : "▲ ") + Math.abs(s.paceChangePct).toFixed(1) + "%");
+      note.appendChild(dl); note.appendChild(document.createTextNode("  this month vs the same days"));
+      pace.appendChild(note);
+    }
+    const bar = h("div", "daybar"); const fill = document.createElement("span");
+    fill.style.width = Math.round(s.today / s.daysInMonth * 100) + "%"; bar.appendChild(fill); pace.appendChild(bar);
+    pace.appendChild(h("div", "p-note", "Day " + s.today + " of " + s.daysInMonth));
+    left.appendChild(pace);
+    row.appendChild(left);
+
+    const right = h("div", "cardg"); right.style.flex = "1";
+    const lg = h("div", "legend");
+    const a = h("span"); const ia = document.createElement("i"); ia.style.background = "linear-gradient(90deg,#4CC9F0,#2FD6A0)"; a.appendChild(ia); a.appendChild(document.createTextNode(s.monthName + " so far"));
+    const b = h("span"); const ib = document.createElement("i"); ib.style.background = "#7C8CFF"; ib.style.opacity = ".7"; b.appendChild(ib); b.appendChild(document.createTextNode(s.prevMonthName));
+    lg.appendChild(a); lg.appendChild(b);
+    right.appendChild(h("div", "p-title", "Total sales, building up day by day"));
+    right.appendChild(lg);
+    right.appendChild(lineChart(s));
+    row.appendChild(right);
+    stage.appendChild(row);
+
+    countUp(val, Number(fixed[0]), false);
+  }
+
+  function gaugeSvg(c){
+    const S = 560, cx = 280, cy = 280, r = 214, sw = 44, span = 240;
+    const C = 2 * Math.PI * r;
+    const pct = Math.max(0, Math.min(1, c.target ? c.count / c.target : 0));
+    const e = svg("svg", { viewBox:"0 0 " + S + " " + S });
+    const defs = svg("defs", {});
+    const g = svg("linearGradient", { id:"gG", x1:"0", y1:"1", x2:"1", y2:"0" });
+    g.appendChild(svg("stop", { offset:"0", "stop-color":"#7C5CFF" })); g.appendChild(svg("stop", { offset:"1", "stop-color":"#4CC9F0" }));
+    defs.appendChild(g); e.appendChild(defs);
+    const rot = "rotate(150 " + cx + " " + cy + ")";
+    e.appendChild(svg("circle", { cx, cy, r, fill:"none", stroke:"rgba(255,255,255,.12)", "stroke-width":sw, "stroke-linecap":"round",
+      "stroke-dasharray":(span / 360 * C).toFixed(1) + " " + C.toFixed(1), transform:rot }));
+    const prog = svg("circle", { cx, cy, r, fill:"none", stroke:"url(#gG)", "stroke-width":sw, "stroke-linecap":"round",
+      "stroke-dasharray":"0 " + C.toFixed(1), transform:rot });
+    prog.style.transition = reduceMotion ? "none" : "stroke-dasharray 1.4s ease-out";
+    e.appendChild(prog);
+    const len = (pct * span / 360 * C);
+    setTimeout(() => prog.setAttribute("stroke-dasharray", Math.max(0.1, len).toFixed(1) + " " + C.toFixed(1)), 80);
+    // end marker
+    const ang = (150 + span * pct) * Math.PI / 180;
+    e.appendChild(svg("circle", { cx:(cx + r * Math.cos(ang)).toFixed(1), cy:(cy + r * Math.sin(ang)).toFixed(1), r:14, fill:"#FFFFFF" }));
+    return e;
+  }
+
+  function renderCustomers(tile, m){
+    const c = m.customers;
+    stage.textContent = "";
+    stage.appendChild(metricHead(tile, m));
+    const row = h("div", "mrow");
+
+    const gc = h("div", "gauge-card shine");
+    const gauge = h("div", "gauge");
+    gauge.appendChild(gaugeSvg(c));
+    const center = h("div", "g-center");
+    const num = h("div", "g-num", String(c.count));
+    center.appendChild(num);
+    center.appendChild(h("div", "g-of", "of " + c.target));
+    center.appendChild(h("div", "g-lbl", "new B2C customers in " + c.monthName));
+    gauge.appendChild(center);
+    const won = c.remaining === 0;
+    gauge.appendChild(h("div", "g-pill" + (won ? " win" : ""), won ? "Target reached" : c.remaining + " to go"));
+    gc.appendChild(gauge);
+    row.appendChild(gc);
+
+    const right = h("div", "mcol"); right.style.flex = "1";
+    const top = h("div", "cardg");
+    const sr = h("div", "stat-row");
+    const s1 = h("div", "stat"); s1.appendChild(h("div", "s-val", String(c.daysLeft))); s1.appendChild(h("div", "s-lbl", c.daysLeft === 1 ? "day left in " + c.monthName : "days left in " + c.monthName));
+    const s2 = h("div", "stat"); s2.appendChild(h("div", "s-val", won ? "0" : String(c.perDayNeeded))); s2.appendChild(h("div", "s-lbl", "new customers needed each day"));
+    sr.appendChild(s1); sr.appendChild(s2); top.appendChild(sr);
+    right.appendChild(top);
+
+    const hist = h("div", "cardg"); hist.style.flex = "1";
+    hist.appendChild(h("div", "p-title", "New B2C customers by month"));
+    const W = 760, H = 340, bw = 150, gap = 70, baseY = 290, topY = 36;
+    const maxV = Math.max(c.target, ...c.history.map(x => x.count), 1);
+    const sv = svg("svg", { "class":"chart-svg", viewBox:"0 0 " + W + " " + H, preserveAspectRatio:"xMidYMid meet" });
+    sv.style.height = "372px";
+    const ty = baseY - (c.target / maxV) * (baseY - topY);
+    sv.appendChild(svg("line", { x1:0, x2:W, y1:ty, y2:ty, stroke:"#FFC24B", "stroke-width":3, "stroke-dasharray":"12 10" }));
+    const tt = svg("text", { x:W, y:ty - 12, "text-anchor":"end", "font-size":26 }); tt.textContent = "Target " + c.target; sv.appendChild(tt);
+    const x0 = (W - (c.history.length * bw + (c.history.length - 1) * gap)) / 2;
+    c.history.forEach((hv, i) => {
+      const bh = Math.max(4, (hv.count / maxV) * (baseY - topY));
+      const bx = x0 + i * (bw + gap);
+      const last = i === c.history.length - 1;
+      const rect = svg("rect", { x:bx, y:baseY - bh, width:bw, height:bh, rx:14, fill: last ? "#4CC9F0" : "rgba(124,140,255,.55)" });
+      sv.appendChild(rect);
+      const vt = svg("text", { x:bx + bw / 2, y:baseY - bh - 14, "text-anchor":"middle", "font-size":40, "font-weight":700 }); vt.style.fill = "#FFFFFF"; vt.textContent = String(hv.count); sv.appendChild(vt);
+      const lt = svg("text", { x:bx + bw / 2, y:baseY + 40, "text-anchor":"middle", "font-size":28 }); lt.textContent = hv.label; sv.appendChild(lt);
+    });
+    hist.appendChild(sv);
+    right.appendChild(hist);
+    row.appendChild(right);
+    stage.appendChild(row);
+
+    countUp(num, c.count, true);
+  }
+
+  function renderMetric(tile, m){
+    if(tile.metric === "customers") renderCustomers(tile, m); else renderSales(tile, m);
+  }
+
   function showMessage(text){
     stage.textContent = "";
     stage.appendChild(h("div", "msg", text));
@@ -439,8 +723,12 @@
       const wantsTasks = tiles.some(t => t.type === "tasks");
       const tasks = wantsTasks ? await fetchTasks() : null;
       const hasTasks = !!(tasks && tasks.members.some(m => m.tasks && m.tasks.length));
-      // skip the task slide when nobody has tasks (or the feed is unreachable)
-      const playlist = tiles.filter(t => t.type !== "tasks" || hasTasks);
+      const wantsMetrics = tiles.some(t => t.type === "metric");
+      const metrics = wantsMetrics ? await fetchMetrics() : null;
+      // skip the task slide when nobody has tasks, and CRM tiles when the CRM numbers can't be loaded
+      const playlist = tiles.filter(t =>
+        t.type === "tasks" ? hasTasks :
+        t.type === "metric" ? !!(metrics && metrics[t.metric]) : true);
 
       if(!playlist.length){
         showMessage("Nothing to show yet. Add a tile in /admin.");
@@ -453,6 +741,7 @@
         const t = playlist[i];
         const secs = Number(t.secs) || 20;
         if(t.type === "tasks") await swapTo(() => renderTasks(tasks, t), i, secs);
+        else if(t.type === "metric") await swapTo(() => renderMetric(t, metrics), i, secs);
         else await swapTo(() => renderChart(t), i, secs);
         await sleep(secs * 1000);
       }
