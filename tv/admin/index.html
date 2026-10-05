@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>TV Board — Admin</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#0b1120;color:#e6edf7;font-family:system-ui,sans-serif}
+  .page{max-width:880px;margin:0 auto;padding:28px 18px 80px}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{opacity:.55;font-size:14px;margin:0 0 22px}
+  .card{background:#111c33;border:1px solid #1e2c4a;border-radius:14px;padding:16px;margin-bottom:12px}
+  .card.off{opacity:.5}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  label.small{font-size:12px;opacity:.6;display:block;margin-bottom:4px}
+  input[type=text],input[type=password],input[type=number]{
+    width:100%;background:#0b1120;color:#e6edf7;border:1px solid #2a3a5e;border-radius:8px;
+    padding:10px 12px;font-size:15px}
+  input:focus{outline:2px solid #5b8cff;border-color:#5b8cff}
+  .grow{flex:1;min-width:200px}
+  .secs{width:90px}
+  button{background:#1b2a4a;color:#e6edf7;border:1px solid #2a3a5e;border-radius:8px;
+    padding:9px 14px;font-size:14px;cursor:pointer}
+  button:hover{background:#243659}
+  button.primary{background:#3b6cf0;border-color:#3b6cf0;font-weight:600}
+  button.primary:hover{background:#4a79f5}
+  button.danger{color:#ff8a8a}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:14px}
+  .badge{font-size:11px;letter-spacing:1px;text-transform:uppercase;background:#1e2c4a;
+    border-radius:6px;padding:3px 8px;opacity:.8}
+  .bar{position:sticky;bottom:0;background:#0b1120ee;padding:14px 0;display:flex;gap:10px;
+    align-items:center;flex-wrap:wrap;border-top:1px solid #1e2c4a;margin-top:18px}
+  .msg{font-size:14px}
+  .msg.ok{color:#34d399}.msg.err{color:#ff8a8a}
+  .help{font-size:13px;line-height:1.6;opacity:.7;background:#0f1930;border-radius:10px;
+    padding:12px 14px;margin:0 0 18px}
+  .login{max-width:360px;margin:12vh auto}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div id="login" class="login">
+    <h1>TV Board — Admin</h1>
+    <p class="sub">Enter the admin password to manage what plays on the TV.</p>
+    <div class="card">
+      <label class="small" for="pw">Password</label>
+      <input id="pw" type="password" autocomplete="current-password">
+      <div class="row" style="margin-top:12px">
+        <button id="loginBtn" class="primary">Log in</button>
+        <span id="loginMsg" class="msg"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="editor" class="hidden">
+    <h1>TV Board — Admin</h1>
+    <p class="sub">What plays on the TV, in this order. Changes show on the TV within about a minute of saving.</p>
+
+    <div class="help">
+      <b>Adding a dashboard chart:</b> in Zoho Analytics open the card → <b>⋯</b> → <b>Embed URL</b>.
+      In <b>Allowed Domains</b> add <code>raymiyo-tools-tv.vercel.app</code> (keep the ones already there), click Done,
+      then copy the URL and paste it into a new tile below.
+    </div>
+
+    <div id="list"></div>
+
+    <div class="bar">
+      <button id="addBtn">+ Add chart tile</button>
+      <button id="saveBtn" class="primary">Save changes</button>
+      <a href="/" target="_blank" style="color:#8fb0ff;font-size:14px">Open TV page ↗</a>
+      <span id="msg" class="msg"></span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  let password = sessionStorage.getItem("tvAdminPw") || "";
+  let tiles = [];
+  const $ = id => document.getElementById(id);
+
+  function say(el, text, kind){ el.textContent = text || ""; el.className = "msg" + (kind ? " " + kind : ""); }
+
+  async function api(body){
+    const r = await fetch("/api/tiles", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body)
+    });
+    let data = {};
+    try{ data = await r.json(); }catch(e){}
+    return { ok:r.ok, status:r.status, data };
+  }
+
+  async function tryLogin(pw){
+    const res = await api({ action:"login", password: pw });
+    if(res.ok){
+      password = pw;
+      sessionStorage.setItem("tvAdminPw", pw);
+      $("login").classList.add("hidden");
+      $("editor").classList.remove("hidden");
+      await loadTiles();
+      return true;
+    }
+    return res;
+  }
+
+  async function loadTiles(){
+    const r = await fetch("/api/tiles", { cache:"no-store" });
+    const d = await r.json();
+    tiles = Array.isArray(d.tiles) ? d.tiles : [];
+    render();
+  }
+
+  function render(){
+    const list = $("list");
+    list.textContent = "";
+    tiles.forEach((t, i) => {
+      const card = document.createElement("div");
+      card.className = "card" + (t.on === false ? " off" : "");
+
+      const top = document.createElement("div");
+      top.className = "row";
+
+      const tog = document.createElement("label");
+      tog.className = "toggle";
+      const cb = document.createElement("input");
+      cb.type = "checkbox"; cb.checked = t.on !== false;
+      cb.addEventListener("change", () => { t.on = cb.checked; render(); });
+      tog.appendChild(cb);
+      tog.appendChild(document.createTextNode(" Show on TV"));
+      top.appendChild(tog);
+
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = t.type === "tasks" ? "Task board" : "Chart";
+      top.appendChild(badge);
+
+      const spacer = document.createElement("span"); spacer.style.flex = "1"; top.appendChild(spacer);
+
+      const up = document.createElement("button"); up.textContent = "↑"; up.title = "Move up";
+      up.addEventListener("click", () => { if(i>0){ [tiles[i-1],tiles[i]]=[tiles[i],tiles[i-1]]; render(); } });
+      const down = document.createElement("button"); down.textContent = "↓"; down.title = "Move down";
+      down.addEventListener("click", () => { if(i<tiles.length-1){ [tiles[i+1],tiles[i]]=[tiles[i],tiles[i+1]]; render(); } });
+      const del = document.createElement("button"); del.textContent = "Remove"; del.className = "danger";
+      del.addEventListener("click", () => {
+        if(confirm('Remove "' + (t.title || "this tile") + '"?')){ tiles.splice(i,1); render(); }
+      });
+      top.appendChild(up); top.appendChild(down); top.appendChild(del);
+      card.appendChild(top);
+
+      const fields = document.createElement("div");
+      fields.className = "row"; fields.style.marginTop = "12px";
+
+      const f1 = document.createElement("div"); f1.className = "grow";
+      f1.innerHTML = '<label class="small">Title shown above the tile</label>';
+      const ti = document.createElement("input"); ti.type = "text"; ti.value = t.title || ""; ti.maxLength = 80;
+      ti.addEventListener("input", () => { t.title = ti.value; });
+      f1.appendChild(ti); fields.appendChild(f1);
+
+      const f2 = document.createElement("div");
+      f2.innerHTML = '<label class="small">Seconds on screen</label>';
+      const se = document.createElement("input"); se.type = "number"; se.min = 5; se.max = 300; se.className = "secs";
+      se.value = t.secs || 20;
+      se.addEventListener("input", () => { t.secs = Number(se.value) || 20; });
+      f2.appendChild(se); fields.appendChild(f2);
+      card.appendChild(fields);
+
+      if(t.type !== "tasks"){
+        const u = document.createElement("div"); u.style.marginTop = "10px";
+        u.innerHTML = '<label class="small">Embed URL (from Zoho Analytics)</label>';
+        const ui = document.createElement("input"); ui.type = "text"; ui.value = t.url || "";
+        ui.placeholder = "https://crm.zoho.com/crm/specific/ViewChartImage?...";
+        ui.addEventListener("input", () => { t.url = ui.value.trim(); });
+        u.appendChild(ui); card.appendChild(u);
+      } else {
+        const n = document.createElement("p");
+        n.className = "sub"; n.style.margin = "10px 0 0";
+        n.textContent = "Live from the Huddle board. It is skipped automatically in weeks when nobody has tasks.";
+        card.appendChild(n);
+      }
+
+      list.appendChild(card);
+    });
+    if(!tiles.length){
+      const e = document.createElement("p"); e.className = "sub";
+      e.textContent = "No tiles yet. Click “+ Add chart tile”.";
+      list.appendChild(e);
+    }
+  }
+
+  $("addBtn").addEventListener("click", () => {
+    tiles.push({ id: "t" + Date.now(), type:"chart", title:"", secs:20, on:true, url:"" });
+    render();
+    window.scrollTo(0, document.body.scrollHeight);
+  });
+
+  $("saveBtn").addEventListener("click", async () => {
+    say($("msg"), "Saving…");
+    const res = await api({ password, tiles });
+    if(res.ok){ say($("msg"), "Saved. The TV will pick it up within a minute.", "ok"); }
+    else if(res.status === 401){ say($("msg"), "Session expired — log in again.", "err"); sessionStorage.removeItem("tvAdminPw"); }
+    else { say($("msg"), (res.data && res.data.error) || "Could not save", "err"); }
+  });
+
+  async function doLogin(){
+    say($("loginMsg"), "Checking…");
+    const res = await tryLogin($("pw").value);
+    if(res === true) return;
+    say($("loginMsg"), (res.data && res.data.error) || "Could not log in", "err");
+  }
+  $("loginBtn").addEventListener("click", doLogin);
+  $("pw").addEventListener("keydown", e => { if(e.key === "Enter") doLogin(); });
+
+  if(password){ tryLogin(password).then(r => { if(r !== true) sessionStorage.removeItem("tvAdminPw"); }); }
+})();
+</script>
+</body>
+</html>
