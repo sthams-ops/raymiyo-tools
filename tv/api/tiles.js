@@ -10,6 +10,9 @@ const redis = new Redis({
 // all start with "huddle:" and are never touched here.
 const KEY = "tv:tiles";
 
+// CRM metric tiles the TV page knows how to draw
+const METRICS = ["sales", "customers"];
+
 // Used until the first time someone saves from the admin page.
 const DEFAULT_TILES = [
   {
@@ -50,12 +53,19 @@ function clean(tiles) {
     throw new Error("Invalid tile list");
   }
   return tiles.map((t, i) => {
-    const type = t && t.type === "tasks" ? "tasks" : "chart";
+    const type = t && t.type === "tasks" ? "tasks" : t && t.type === "metric" ? "metric" : "chart";
     const title = String((t && t.title) || "").trim().slice(0, 80);
     const secs = Math.min(300, Math.max(5, Math.round(Number(t && t.secs) || 20)));
     const on = !(t && t.on === false);
     const id = String((t && t.id) || `${Date.now()}-${i}`).slice(0, 40);
     const out = { id, type, title, secs, on };
+    if (type === "metric") {
+      const metric = String((t && t.metric) || "");
+      if (!METRICS.includes(metric)) {
+        throw new Error(`Tile ${i + 1} ("${title || "no title"}"): unknown CRM metric`);
+      }
+      out.metric = metric;
+    }
     if (type === "chart") {
       const url = String((t && t.url) || "").trim();
       if (!/^https:\/\//i.test(url) || url.length > 2000) {
