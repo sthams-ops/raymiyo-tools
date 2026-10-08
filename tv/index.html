@@ -21,7 +21,9 @@
       radial-gradient(1100px 820px at 98% 100%, rgba(24,180,244,.30), transparent 62%),
       radial-gradient(760px 600px at 80% 4%, rgba(232,80,143,.20), transparent 62%),
       linear-gradient(160deg,#0A1030 0%,#10184A 55%,#0B1238 100%);}
-  #canvas{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center center}
+  #canvas{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center center;visibility:hidden}
+  #canvas.ready{visibility:visible}
+  #dbg{position:fixed;left:8px;top:8px;z-index:99;background:rgba(0,0,0,.78);color:#7CFFB2;font:14px/1.45 monospace;padding:8px 12px;border-radius:8px;white-space:pre}
 
   /* shared: frosted-glass surface and the rotating shine border (no blur filters, so it stays light on TV boxes) */
   .glass{background:linear-gradient(145deg,rgba(255,255,255,.12),rgba(255,255,255,.04));
@@ -220,11 +222,49 @@
   if(location.search.indexOf("lite") > -1) document.body.classList.add("lite");   // add ?lite to the URL to stop the border animation
 
   // ── scale the 1920×1080 canvas to any screen ──
-  function fit(){
-    const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080) || 1;
-    canvas.style.transform = "translate(-50%,-50%) scale(" + s + ")";
+  // TV browsers sometimes report 0 or a wrong size at first, so: measure three ways, take the smallest
+  // that makes sense, keep the board hidden until a real size is known, and re-check every few seconds.
+  function measure(){
+    const vv = window.visualViewport, de = document.documentElement;
+    const sets = [
+      [window.innerWidth, window.innerHeight],
+      [de ? de.clientWidth : 0, de ? de.clientHeight : 0],
+      [vv ? vv.width : 0, vv ? vv.height : 0]
+    ].filter(d => d[0] > 100 && d[1] > 100);
+    if(!sets.length) return null;
+    return { w: Math.min.apply(null, sets.map(d => d[0])), h: Math.min.apply(null, sets.map(d => d[1])), sets };
   }
-  window.addEventListener("resize", fit); fit();
+  let lastScale = 0;
+  function fit(){
+    const m = measure();
+    if(!m) return false;
+    const s = Math.min(m.w / 1920, m.h / 1080);
+    if(Math.abs(s - lastScale) > 0.001){
+      lastScale = s;
+      canvas.style.transform = "translate(-50%,-50%) scale(" + s + ")";
+    }
+    canvas.classList.add("ready");
+    if(dbgEl){
+      dbgEl.textContent = "inner  " + window.innerWidth + " x " + window.innerHeight +
+        "\nclient " + document.documentElement.clientWidth + " x " + document.documentElement.clientHeight +
+        "\nvisual " + (window.visualViewport ? Math.round(window.visualViewport.width) + " x " + Math.round(window.visualViewport.height) + " (x" + window.visualViewport.scale + ")" : "n/a") +
+        "\nscreen " + (window.screen ? screen.width + " x " + screen.height : "n/a") + "   dpr " + window.devicePixelRatio +
+        "\nusing  " + Math.round(m.w) + " x " + Math.round(m.h) + "   scale " + s.toFixed(3);
+    }
+    return true;
+  }
+  let dbgEl = null;
+  if(location.search.indexOf("debug") > -1){ dbgEl = document.createElement("div"); dbgEl.id = "dbg"; document.body.appendChild(dbgEl); }
+  window.addEventListener("resize", fit);
+  window.addEventListener("orientationchange", fit);
+  window.addEventListener("load", fit);
+  if(window.visualViewport) window.visualViewport.addEventListener("resize", fit);
+  fit();
+  let tries = 0;
+  (function recheck(){
+    fit(); tries++;
+    setTimeout(recheck, tries < 40 ? 250 : 5000);   // quick retries at start, then every 5 s
+  })();
 
   // ── clock (Nepal time) ──
   function nowParts(){
