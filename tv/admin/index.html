@@ -73,6 +73,7 @@
       <select id="metricSel" style="background:#0b1120;color:#e6edf7;border:1px solid #2a3a5e;border-radius:8px;padding:9px 10px;font-size:14px">
         <option value="sales">B2C sales this month</option>
         <option value="customers">New B2C customers vs target</option>
+        <option value="b2b">B2B sales this month</option>
       </select>
       <button id="addMetricBtn">+ Add live CRM tile</button>
       <button id="saveBtn" class="primary">Save changes</button>
@@ -179,7 +180,7 @@
       if(t.type === "metric"){
         const n = document.createElement("p");
         n.className = "sub"; n.style.margin = "10px 0 0";
-        n.textContent = (t.metric === "customers" ? "New B2C customers against the monthly target" : "B2C sales this month against last month") + ". Numbers come straight from the CRM and refresh on their own.";
+        n.textContent = (t.metric === "customers" ? "New B2C customers against the monthly target" : t.metric === "b2b" ? "B2B sales this month against last month" : "B2C sales this month against last month") + ". Numbers come straight from the CRM and refresh on their own.";
         card.appendChild(n);
       } else if(t.type !== "tasks"){
         const u = document.createElement("div"); u.style.marginTop = "10px";
@@ -212,7 +213,7 @@
 
   $("addMetricBtn").addEventListener("click", () => {
     const m = $("metricSel").value;
-    tiles.push({ id: "m" + Date.now(), type:"metric", metric:m, title: m === "customers" ? "New B2C Customers vs Target" : "B2C Sales — This Month", secs:20, on:true });
+    tiles.push({ id: "m" + Date.now(), type:"metric", metric:m, title: m === "customers" ? "New B2C Customers vs Target" : m === "b2b" ? "B2B Sales — This Month" : "B2C Sales — This Month", secs:20, on:true });
     render();
     window.scrollTo(0, document.body.scrollHeight);
   });
