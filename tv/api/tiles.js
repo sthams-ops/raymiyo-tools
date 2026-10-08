@@ -11,7 +11,7 @@ const redis = new Redis({
 const KEY = "tv:tiles";
 
 // CRM metric tiles the TV page knows how to draw
-const METRICS = ["sales", "customers"];
+const METRICS = ["sales", "customers", "b2b"];
 
 // Used until the first time someone saves from the admin page.
 const DEFAULT_TILES = [
