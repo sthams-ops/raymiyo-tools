@@ -89,6 +89,7 @@ export default async function handler(req, res) {
     const target = Number(process.env.TV_NEW_CUSTOMER_TARGET) || 30;
     const metrics = buildMetrics({
       rows: raw.days || [],
+      brows: Array.isArray(raw.bdays) ? raw.bdays : undefined,
       counts: { c0: raw.c0, c1: raw.c1, c2: raw.c2 },
       todayYmd,
       target,
