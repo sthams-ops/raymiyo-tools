@@ -577,14 +577,16 @@
   }
 
   function renderSales(tile, m){
-    const s = m.sales;
+    const isB2B = tile.metric === "b2b";
+    const s = isB2B ? m.b2b : m.sales;
+    const kind = isB2B ? "B2B" : "B2C";
     stage.textContent = "";
     stage.appendChild(metricHead(tile, m));
     const row = h("div", "mrow");
 
     const left = h("div", "mcol"); left.style.width = "680px"; left.style.flex = "none";
     const kpi = h("div", "kpi shine");
-    kpi.appendChild(h("div", "k-label", "B2C invoices, 1 to " + s.today + " " + s.monthName));
+    kpi.appendChild(h("div", "k-label", kind + " invoices, 1 to " + s.today + " " + s.monthName));
     const num = h("div", "k-num");
     num.appendChild(h("span", "k-cur", "NPR"));
     // exact CRM amount: whole rupees count up, the paisa are shown as they are in the CRM
@@ -597,8 +599,9 @@
       const down = s.changePct < 0;
       kpi.appendChild(h("div", "k-pill " + (down ? "down" : "up"), (down ? "▼ " : "▲ ") + Math.abs(s.changePct).toFixed(1) + "% vs " + s.prevMonthName));
     }
-    kpi.appendChild(h("div", "k-sub", s.count + " invoices so far"));
-    kpi.appendChild(h("div", "k-sub", s.prevMonthName + ": NPR " + inr(s.prevTotal, true) + " from " + s.prevCount + " invoices"));
+    const inv = n => n + (n === 1 ? " invoice" : " invoices");
+    kpi.appendChild(h("div", "k-sub", inv(s.count) + " so far"));
+    kpi.appendChild(h("div", "k-sub", s.prevMonthName + ": NPR " + inr(s.prevTotal, true) + " from " + inv(s.prevCount)));
     left.appendChild(kpi);
 
     const pace = h("div", "cardg"); pace.style.flex = "1";
