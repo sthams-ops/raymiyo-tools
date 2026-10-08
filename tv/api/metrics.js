@@ -9,9 +9,27 @@ const redis = new Redis({
 const CACHE_KEY = "tv:metrics";
 const FRESH_SECONDS = 120; // reuse a result this young instead of asking Zoho again
 
-function zohoKey() {
-  const raw = process.env.ZOHO_TV_API_KEY || "";
-  return (raw.includes("zapikey=") ? raw.split("zapikey=")[1] : raw).trim();
+// The env var can be the whole REST API URL copied from Zoho (recommended) or just the key.
+// When it is the whole URL, the function name in it is used, so the two can never disagree.
+function zohoTarget() {
+  const raw = (process.env.ZOHO_TV_API_KEY || "").trim();
+  let key = raw;
+  let origin = "https://www.zohoapis.com";
+  let path = "/crm/v7/functions/gettvmetrics/actions/execute";
+  if (raw.includes("zapikey=")) {
+    try {
+      const u = new URL(raw);
+      key = u.searchParams.get("zapikey") || raw.split("zapikey=")[1];
+      if (/\/functions\/[^/]+\/actions\/execute/.test(u.pathname)) {
+        origin = u.origin;
+        path = u.pathname;
+      }
+    } catch (e) {
+      key = raw.split("zapikey=")[1];
+    }
+  }
+  const name = (path.match(/\/functions\/([^/]+)\//) || [])[1] || "?";
+  return { key: String(key || "").trim(), url: origin + path, name };
 }
 
 async function readCache() {
@@ -25,12 +43,12 @@ async function readCache() {
 }
 
 async function fetchFromZoho(todayYmd) {
-  const key = zohoKey();
-  if (!key) throw new Error("ZOHO_TV_API_KEY is not set in Vercel yet.");
+  const target = zohoTarget();
+  if (!target.key) throw new Error("ZOHO_TV_API_KEY is not set in Vercel yet.");
   const { months } = monthRanges(todayYmd);
   const q = new URLSearchParams({
     auth_type: "apikey",
-    zapikey: key,
+    zapikey: target.key,
     d0s: months[0].start,
     d0e: months[0].end,
     d1s: months[1].start,
@@ -38,11 +56,11 @@ async function fetchFromZoho(todayYmd) {
     d2s: months[2].start,
     d2e: months[2].end,
   });
-  const url = `https://www.zohoapis.com/crm/v7/functions/gettvmetrics/actions/execute?${q.toString()}`;
+  const url = `${target.url}?${q.toString()}`;
   const resp = await fetch(url);
   const wrapper = await resp.json();
   if (!wrapper || wrapper.code !== "success") {
-    throw new Error("Zoho said: " + JSON.stringify(wrapper).slice(0, 300));
+    throw new Error("Zoho said: " + JSON.stringify(wrapper).slice(0, 300) + " [function called: " + target.name + "]");
   }
   const out = wrapper.details && wrapper.details.output;
   const data = typeof out === "string" ? JSON.parse(out) : out;
