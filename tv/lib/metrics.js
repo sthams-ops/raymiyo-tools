@@ -81,16 +81,32 @@ function salesFor(rows, range, uptoDay) {
   };
 }
 
-export function buildMetrics({ rows, counts, todayYmd, target }) {
+export function buildMetrics({ rows, brows, counts, todayYmd, target }) {
   const { today, months } = monthRanges(todayYmd);
   const [cur, prev, prev2] = months;
 
   const s0 = salesFor(rows || [], cur, today);
   const s1 = salesFor(rows || [], prev, null);
 
-  const sameDaysLast = prev.days >= today ? s1.cum[today - 1] : s1.total;
-  const changePct = s1.total ? round2(((s0.total - s1.total) / s1.total) * 100) : null;
-  const paceChangePct = sameDaysLast ? round2(((s0.total - sameDaysLast) / sameDaysLast) * 100) : null;
+  const salesBlock = (a, b) => {
+    const sameDays = prev.days >= today ? b.cum[today - 1] : b.total;
+    return {
+      monthName: cur.name,
+      prevMonthName: prev.name,
+      today,
+      daysInMonth: cur.days,
+      daysInPrevMonth: prev.days,
+      total: a.total,
+      count: a.count,
+      prevTotal: b.total,
+      prevCount: b.count,
+      changePct: b.total ? round2(((a.total - b.total) / b.total) * 100) : null,
+      sameDaysLast: sameDays === undefined ? null : sameDays,
+      paceChangePct: sameDays ? round2(((a.total - sameDays) / sameDays) * 100) : null,
+      cum: a.cum,
+      prevCum: b.cum,
+    };
+  };
 
   const c0 = Number(counts && counts.c0) || 0;
   const c1 = Number(counts && counts.c1) || 0;
@@ -99,23 +115,8 @@ export function buildMetrics({ rows, counts, todayYmd, target }) {
   const daysLeft = cur.days - today + 1; // today counts
   const remaining = Math.max(0, tgt - c0);
 
-  return {
-    sales: {
-      monthName: cur.name,
-      prevMonthName: prev.name,
-      today,
-      daysInMonth: cur.days,
-      daysInPrevMonth: prev.days,
-      total: s0.total,
-      count: s0.count,
-      prevTotal: s1.total,
-      prevCount: s1.count,
-      changePct,
-      sameDaysLast: sameDaysLast === undefined ? null : sameDaysLast,
-      paceChangePct,
-      cum: s0.cum,
-      prevCum: s1.cum,
-    },
+  const out = {
+    sales: salesBlock(s0, s1),
     customers: {
       monthName: cur.name,
       count: c0,
@@ -130,4 +131,8 @@ export function buildMetrics({ rows, counts, todayYmd, target }) {
       ],
     },
   };
+  if (Array.isArray(brows)) {
+    out.b2b = salesBlock(salesFor(brows, cur, today), salesFor(brows, prev, null));
+  }
+  return out;
 }
