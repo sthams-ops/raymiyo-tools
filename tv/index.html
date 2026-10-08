@@ -771,8 +771,10 @@
         t.type === "metric" ? !!(metrics && metrics[t.metric]) : true);
 
       if(!playlist.length){
-        showMessage("Nothing to show yet. Add a tile in /admin.");
-        await sleep(30000);
+        const crmDown = wantsMetrics && !(metrics && (metrics.sales || metrics.customers));
+        showMessage(crmDown ? "Live CRM numbers are not loading right now. Retrying\u2026"
+                            : "Nothing to show yet. Add a tile in /admin.");
+        await sleep(crmDown ? 15000 : 30000);
         continue;
       }
 
