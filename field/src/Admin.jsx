@@ -1,0 +1,665 @@
+// The admin screen. The "view only" admin sees the same screens with every
+// change control removed; the server also refuses changes from that account.
+import { useEffect, useMemo, useState } from "react";
+import { Download, FileText, MapPinned, Search, Settings as Cog, Store, Trash2, Users } from "lucide-react";
+import { api } from "./api.js";
+import MapView from "./MapView.jsx";
+import { Avatar, Board, VisitRow, VisitFacts } from "./ui.jsx";
+import { buildMapData, indexBy, weekStartOf } from "./mapdata.js";
+import { toRows, downloadCsv, downloadPdf } from "./export.js";
+import { COLORS, OUTCOMES, ROLES, money, scoreboard } from "../shared/rules.js";
+
+const TABS = [
+  ["live", "Map", MapPinned],
+  ["shops", "Shops", Store],
+  ["team", "Team", Users],
+  ["settings", "Settings", Cog],
+  ["export", "Export", FileText],
+];
+
+export default function Admin({ data, reload, setRange, say }) {
+  const canEdit = data.me.role === "admin";
+  const [tab, setTab] = useState("live");
+  const [person, setPerson] = useState("all");
+  const [outcome, setOutcome] = useState("all");
+  const users = useMemo(() => indexBy(data.users, "email"), [data.users]);
+  const shops = useMemo(() => indexBy(data.shops, "id"), [data.shops]);
+  const reps = data.users.filter((u) => u.role === "rep");
+  const visits = useMemo(
+    () => data.visits.filter((v) => (person === "all" || v.rep === person) && (outcome === "all" || v.outcome === outcome)),
+    [data.visits, person, outcome]
+  );
+  const ctx = { data, reload, say, canEdit, users, shops, reps, visits, person, setPerson, outcome, setOutcome, setRange };
+
+  return (
+    <>
+      <nav className="tabs" aria-label="Sections">
+        {TABS.map(([key, label, Icon]) => (
+          <button key={key} aria-current={tab === key ? "page" : undefined} onClick={() => setTab(key)}>
+            <Icon size={18} />
+            {label}
+          </button>
+        ))}
+      </nav>
+      {!canEdit && <p className="banner">View only. You can see everything; changes are switched off for this account.</p>}
+      {tab === "live" && <Live {...ctx} />}
+      {tab === "shops" && <Shops {...ctx} />}
+      {tab === "team" && <Team {...ctx} />}
+      {tab === "settings" && <SettingsTab {...ctx} />}
+      {tab === "export" && <ExportTab {...ctx} />}
+    </>
+  );
+}
+
+/* ---------- date and people filters, shared by Map and Export ---------- */
+function Filters({ data, reps, person, setPerson, outcome, setOutcome, setRange, withOutcome }) {
+  const t = data.today;
+  const presets = [
+    ["Today", t, t],
+    ["This week", weekStartOf(t), t],
+    ["This month", t.slice(0, 7) + "-01", t],
+  ];
+  // Only one preset lights up, even on a Sunday when "today" and "this week" are the same dates.
+  const active = presets.find(([, from, to]) => data.from === from && data.to === to);
+  return (
+    <div className="filters">
+      <div className="chips" role="group" aria-label="Dates">
+        {presets.map(([label, from, to]) => (
+          <button key={label} className="chip" aria-pressed={!!active && active[0] === label} onClick={() => setRange({ from, to })}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="two">
+        <label className="field">
+          From
+          <input type="date" value={data.from} max={data.to} onChange={(e) => e.target.value && setRange({ from: e.target.value, to: data.to })} />
+        </label>
+        <label className="field">
+          To
+          <input type="date" value={data.to} min={data.from} max={t} onChange={(e) => e.target.value && setRange({ from: data.from, to: e.target.value })} />
+        </label>
+      </div>
+      <div className="two">
+        <label className="field">
+          Person
+          <select value={person} onChange={(e) => setPerson(e.target.value)}>
+            <option value="all">Everyone</option>
+            {reps.map((u) => <option key={u.email} value={u.email}>{u.name}</option>)}
+          </select>
+        </label>
+        {withOutcome && (
+          <label className="field">
+            Outcome
+            <select value={outcome} onChange={(e) => setOutcome(e.target.value)}>
+              <option value="all">All outcomes</option>
+              {Object.entries(OUTCOMES).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Map tab ---------- */
+function Live(ctx) {
+  const { data, users, shops, visits, person, canEdit, reload, say } = ctx;
+  const [sel, setSel] = useState(null);
+  const [period, setPeriod] = useState("today");
+  const isToday = data.from === data.today && data.to === data.today;
+  const mapData = useMemo(() => {
+    const days = isToday ? Object.fromEntries(Object.entries(data.days).filter(([e]) => person === "all" || e === person)) : {};
+    const shopList = data.shops.filter((s) => person === "all" || s.owner === person);
+    return buildMapData({ visits, shops: shopList, users: data.users, days });
+  }, [visits, data.shops, data.users, data.days, person, isToday]);
+  const orders = visits.filter((v) => v.outcome === "order");
+  const chosen = sel && visits.find((v) => v.id === sel);
+  const many = data.from !== data.to;
+
+  return (
+    <main className="shell wide">
+      <MapView className="map-admin" {...mapData} selected={sel} onSelect={setSel} />
+      <section className="panel">
+        <div className="card">
+          <Filters {...ctx} withOutcome />
+          <div className="stats four">
+            <div className="stat"><b>{visits.length}</b><span>Check-ins</span></div>
+            <div className="stat"><b>{orders.length}</b><span>Orders</span></div>
+            <div className="stat hot"><b>{money(orders.reduce((t, v) => t + v.value, 0))}</b><span>Order value</span></div>
+            <div className="stat"><b>{visits.filter((v) => v.newShop).length}</b><span>New shops</span></div>
+          </div>
+        </div>
+
+        {chosen && (
+          <VisitCard key={chosen.id} v={chosen} shop={shops[chosen.shopId]} user={users[chosen.rep]} data={data} canEdit={canEdit} reload={reload} say={say} close={() => setSel(null)} />
+        )}
+
+        <div className="card">
+          <div className="head">
+            <h3>The race</h3>
+            <div className="seg" role="group" aria-label="Leaderboard period">
+              {[["today", "Today"], ["week", "Week"], ["month", "Month"]].map(([k, label]) => (
+                <button key={k} aria-pressed={period === k} onClick={() => setPeriod(k)}>{label}</button>
+              ))}
+            </div>
+          </div>
+          <Board rows={data.board[period]} />
+        </div>
+
+        <div className="card">
+          <h3>Check-ins, newest first</h3>
+          <div className="rows">
+            {visits.length ? (
+              visits.slice().reverse().map((v) => (
+                <VisitRow key={v.id} v={v} shop={shops[v.shopId]} user={users[v.rep]} showRep showDate={many} selected={sel === v.id} onClick={() => setSel(v.id)} />
+              ))
+            ) : (
+              <p className="muted">No check-ins for these filters.</p>
+            )}
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function VisitCard({ v, shop, user, data, canEdit, reload, say, close }) {
+  const [edit, setEdit] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function run(action, done) {
+    setBusy(true);
+    setErr("");
+    try {
+      await action();
+      await reload();
+      say(done);
+      return true;
+    } catch (e) {
+      setErr(e.message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+  const saveEdit = async () => {
+    const ok = await run(() => api.updateVisit({ id: v.id, outcome: edit.outcome, value: Number(String(edit.value || "").replace(/[^0-9]/g, "")), terms: edit.terms, note: edit.note }), "Check-in updated.");
+    if (ok) setEdit(null);
+  };
+  const remove = async () => {
+    const ok = await run(() => api.deleteVisit(v.id), "Check-in deleted.");
+    if (ok) close();
+  };
+
+  return (
+    <div className="card">
+      <div className="head">
+        <h2>{(shop && shop.name) || v.shopName}</h2>
+        <button className="btn small" onClick={close}>Close</button>
+      </div>
+      {!edit && <VisitFacts v={v} shop={shop} user={user} points={data.settings.points} />}
+      {edit && (
+        <>
+          <div className="chips" role="group" aria-label="Outcome">
+            {Object.keys(OUTCOMES).map((k) => (
+              <button key={k} className={`chip pick-${k}`} aria-pressed={edit.outcome === k} onClick={() => setEdit({ ...edit, outcome: k })}>{OUTCOMES[k]}</button>
+            ))}
+          </div>
+          {edit.outcome === "order" && (
+            <div className="two">
+              <label className="field">
+                Order amount in rupees
+                <input value={edit.value} inputMode="numeric" onChange={(e) => setEdit({ ...edit, value: e.target.value })} />
+              </label>
+              <label className="field">
+                Payment
+                <select value={edit.terms} onChange={(e) => setEdit({ ...edit, terms: e.target.value })}>
+                  <option>Cash</option>
+                  <option>Credit (Cheque)</option>
+                </select>
+              </label>
+            </div>
+          )}
+          <label className="field">
+            Note
+            <textarea value={edit.note} maxLength={500} onChange={(e) => setEdit({ ...edit, note: e.target.value })} />
+          </label>
+        </>
+      )}
+      {err && <p className="error">{err}</p>}
+      {canEdit && (
+        <div className="chips">
+          {edit ? (
+            <>
+              <button className="btn solid" disabled={busy} onClick={saveEdit}>Save changes</button>
+              <button className="btn" disabled={busy} onClick={() => setEdit(null)}>Cancel</button>
+            </>
+          ) : confirmDelete ? (
+            <>
+              <button className="btn danger" disabled={busy} onClick={remove}>Yes, delete it</button>
+              <button className="btn" disabled={busy} onClick={() => setConfirmDelete(false)}>Keep it</button>
+            </>
+          ) : (
+            <>
+              <button className="btn" onClick={() => setEdit({ outcome: v.outcome, value: v.value || "", terms: v.terms || "Cash", note: v.note || "" })}>Edit</button>
+              <button className="btn danger" onClick={() => setConfirmDelete(true)}><Trash2 size={15} /> Delete</button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Shops tab ---------- */
+function Shops({ data, users, canEdit, reload, say }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const list = data.shops
+    .filter((s) => (showArchived ? s.active === false : s.active !== false))
+    .filter((s) => !q.trim() || (s.name + " " + (s.area || "")).toLowerCase().includes(q.trim().toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    <main className="shell single">
+      <section className="panel">
+        <div className="card">
+          <div className="head">
+            <h2>{showArchived ? "Archived shops" : `${list.length} shops`}</h2>
+            <button className="btn small" onClick={() => setShowArchived(!showArchived)}>{showArchived ? "Show active shops" : "Show archived"}</button>
+          </div>
+          <label className="search">
+            <Search size={18} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shops by name or area" aria-label="Search shops" />
+          </label>
+          <div className="rows">
+            {list.map((s) =>
+              open === s.id ? (
+                <ShopForm key={s.id} shop={s} data={data} canEdit={canEdit} reload={reload} say={say} close={() => setOpen(null)} />
+              ) : (
+                <button key={s.id} className="row" onClick={() => setOpen(s.id)}>
+                  <Avatar user={users[s.owner]} size={30} />
+                  <span className="what">
+                    <b>{s.name}</b>
+                    <small>
+                      {s.type}
+                      {s.area ? ", " + s.area : ""} · {s.orders} orders{s.lastVisit ? " · last visit " + s.lastVisit : ""}
+                    </small>
+                  </span>
+                  <span className="pill stage">{s.stage || "Prospect"}</span>
+                </button>
+              )
+            )}
+            {!list.length && <p className="muted">{data.shops.length ? "No shop matches." : "No shops yet. They appear here after the first check-in."}</p>}
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function ShopForm({ shop, data, canEdit, reload, say, close }) {
+  const [f, setF] = useState({ name: shop.name, type: shop.type, area: shop.area || "", phone: shop.phone || "", owner: shop.owner, terms: shop.terms || "" });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const people = data.users.filter((u) => u.active && u.role !== "viewer");
+  async function send(patch, done) {
+    setBusy(true);
+    setErr("");
+    try {
+      await api.saveShop({ id: shop.id, ...patch });
+      await reload();
+      say(done);
+      close();
+    } catch (e) {
+      setErr(e.message);
+      setBusy(false);
+    }
+  }
+  const input = (key, label, props = {}) => (
+    <label className="field">
+      {label}
+      <input value={f[key]} disabled={!canEdit} onChange={(e) => setF({ ...f, [key]: e.target.value })} {...props} />
+    </label>
+  );
+  return (
+    <div className="rowform">
+      {input("name", "Shop name")}
+      <div className="two">
+        {input("area", "Area")}
+        {input("phone", "Phone", { inputMode: "tel" })}
+      </div>
+      <div className="two">
+        <label className="field">
+          Type
+          <select value={f.type} disabled={!canEdit} onChange={(e) => setF({ ...f, type: e.target.value })}>
+            <option>Retailer</option>
+            <option>Wholesaler</option>
+          </select>
+        </label>
+        <label className="field">
+          Payment terms
+          <select value={f.terms} disabled={!canEdit} onChange={(e) => setF({ ...f, terms: e.target.value })}>
+            <option value="">Not set</option>
+            <option>Cash</option>
+            <option>Credit (Cheque)</option>
+          </select>
+        </label>
+      </div>
+      <label className="field">
+        Belongs to
+        <select value={f.owner} disabled={!canEdit} onChange={(e) => setF({ ...f, owner: e.target.value })}>
+          {!people.some((u) => u.email === f.owner) && <option value={f.owner}>{f.owner}</option>}
+          {people.map((u) => <option key={u.email} value={u.email}>{u.name}</option>)}
+        </select>
+      </label>
+      <p className="muted small">
+        Stage: {shop.stage || "Prospect"} · {shop.orders} orders · added {shop.createdAt} ·{" "}
+        <a href={`https://www.google.com/maps?q=${shop.lat},${shop.lng}`} target="_blank" rel="noreferrer">open in Google Maps</a>
+      </p>
+      {err && <p className="error">{err}</p>}
+      <div className="chips">
+        {canEdit && <button className="btn solid" disabled={busy} onClick={() => send(f, "Shop saved.")}>Save shop</button>}
+        {canEdit && (
+          <button className="btn danger" disabled={busy} onClick={() => send({ active: shop.active === false }, shop.active === false ? "Shop restored." : "Shop archived.")}>
+            {shop.active === false ? "Restore shop" : "Archive shop"}
+          </button>
+        )}
+        <button className="btn" disabled={busy} onClick={close}>Close</button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Team tab ---------- */
+function Team({ data, canEdit, reload, say }) {
+  const blank = { local: "", name: "", role: "rep" };
+  const [add, setAdd] = useState(blank);
+  const [open, setOpen] = useState(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const order = { admin: 0, viewer: 1, rep: 2 };
+  const list = data.users.slice().sort((a, b) => order[a.role] - order[b.role] || a.name.localeCompare(b.name));
+
+  async function run(op, payload, done) {
+    setBusy(true);
+    setErr("");
+    try {
+      await api.admin(op, payload);
+      await reload();
+      say(done);
+      return true;
+    } catch (e) {
+      setErr(e.message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function addUser(e) {
+    e.preventDefault();
+    const email = add.local.trim().toLowerCase().replace(/@.*$/, "") + "@" + data.domain;
+    if (await run("saveUser", { user: { email, name: add.name, role: add.role, active: true } }, "Person added. They can sign in now.")) setAdd(blank);
+  }
+
+  return (
+    <main className="shell single">
+      <section className="panel">
+        {canEdit && (
+          <form className="card" onSubmit={addUser}>
+            <div>
+              <h2>Add a person</h2>
+              <p className="muted small">Only @{data.domain} emails can be added. They sign in with their Zoho account.</p>
+            </div>
+            <label className="field">
+              Company email
+              <span className="suffix">
+                <input value={add.local} onChange={(e) => setAdd({ ...add, local: e.target.value })} placeholder="firstname.lastname" autoCapitalize="none" autoComplete="off" required />
+                <em>@{data.domain}</em>
+              </span>
+            </label>
+            <div className="two">
+              <label className="field">
+                Full name
+                <input value={add.name} onChange={(e) => setAdd({ ...add, name: e.target.value })} required />
+              </label>
+              <label className="field">
+                Role
+                <select value={add.role} onChange={(e) => setAdd({ ...add, role: e.target.value })}>
+                  {Object.entries(ROLES).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+              </label>
+            </div>
+            {err && !open && <p className="error">{err}</p>}
+            <button className="btn solid" disabled={busy}>Add person</button>
+          </form>
+        )}
+
+        <div className="card">
+          <h2>Team</h2>
+          <div className="rows">
+            {list.map((u) => {
+              const isOwner = u.email === data.owner;
+              if (open === u.email && canEdit) {
+                return (
+                  <UserForm key={u.email} user={u} isOwner={isOwner} isMe={u.email === data.me.email} busy={busy} err={err} close={() => { setOpen(null); setErr(""); }}
+                    save={async (user) => (await run("saveUser", { user }, "Saved.")) && setOpen(null)}
+                    remove={async () => (await run("removeUser", { email: u.email }, "Person removed.")) && setOpen(null)} />
+                );
+              }
+              return (
+                <button key={u.email} className="row" onClick={() => canEdit && setOpen(u.email)} disabled={!canEdit}>
+                  <Avatar user={u} size={34} />
+                  <span className="what">
+                    <b>{u.name}{!u.active ? " (switched off)" : ""}</b>
+                    <small>{u.email}</small>
+                  </span>
+                  <span className="pill role">{isOwner ? "Owner, admin" : ROLES[u.role]}</span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="muted small">
+            Admin changes anything. Admin, view only sees everything and changes nothing. Field users check in and see only their own check-ins.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function UserForm({ user, isOwner, isMe, busy, err, save, remove, close }) {
+  const [f, setF] = useState({ ...user });
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <div className="rowform">
+      <p className="muted small">{user.email}</p>
+      <div className="two">
+        <label className="field">
+          Full name
+          <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+        </label>
+        <label className="field">
+          Role
+          <select value={f.role} disabled={isOwner} onChange={(e) => setF({ ...f, role: e.target.value })}>
+            {Object.entries(ROLES).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+          </select>
+        </label>
+      </div>
+      <div>
+        <h3>Colour on the map</h3>
+        <div className="swatches" role="group" aria-label="Colour on the map">
+          {COLORS.map((c) => (
+            <button key={c} type="button" style={{ background: c }} aria-pressed={f.color === c} aria-label={"Colour " + c} onClick={() => setF({ ...f, color: c })} />
+          ))}
+        </div>
+      </div>
+      {!isOwner && (
+        <label className="check">
+          <input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Can sign in
+        </label>
+      )}
+      {err && <p className="error">{err}</p>}
+      <div className="chips">
+        <button className="btn solid" disabled={busy} onClick={() => save(f)}>Save</button>
+        {!isOwner && !isMe && (confirm ? (
+          <button className="btn danger" disabled={busy} onClick={remove}>Yes, remove {user.name.split(" ")[0]}</button>
+        ) : (
+          <button className="btn danger" disabled={busy} onClick={() => setConfirm(true)}>Remove</button>
+        ))}
+        <button className="btn" disabled={busy} onClick={close}>Close</button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Settings tab ---------- */
+function SettingsTab({ data, canEdit, reload, say }) {
+  const [points, setPoints] = useState(data.settings.points);
+  const [far, setFar] = useState(data.settings.farMeters);
+  const [brands, setBrands] = useState(data.settings.brands.join(", "));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    setPoints(data.settings.points);
+    setFar(data.settings.farMeters);
+    setBrands(data.settings.brands.join(", "));
+  }, [data.settings]);
+
+  async function save(e) {
+    e.preventDefault();
+    setBusy(true);
+    setErr("");
+    try {
+      await api.admin("saveSettings", { settings: { points, farMeters: far, brands: brands.split(",").map((b) => b.trim()).filter(Boolean) } });
+      await reload();
+      say("Settings saved. Leaderboards now use the new rules.");
+    } catch (e2) {
+      setErr(e2.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const rule = (key, label, hint) => (
+    <label className="field">
+      {label}
+      <input type="number" min="0" max="1000" value={points[key]} disabled={!canEdit} onChange={(e) => setPoints({ ...points, [key]: e.target.value })} />
+      <small>{hint}</small>
+    </label>
+  );
+  const status = [
+    ["Saving check-ins to Zoho CRM", data.features.crm],
+    ["Shelf photos", data.features.photos],
+    ["Office TV link", data.features.tv],
+  ];
+  return (
+    <main className="shell single">
+      <section className="panel">
+        <form className="card" onSubmit={save}>
+          <div>
+            <h2>Points rules</h2>
+            <p className="muted small">Changing a rule re-scores every leaderboard straight away, including past days.</p>
+          </div>
+          <div className="two">
+            {rule("visit", "Each check-in", "Given for every saved visit.")}
+            {rule("newShop", "New shop added", "Extra, on top of the check-in.")}
+          </div>
+          <div className="two">
+            {rule("firstOrder", "First order from a shop", "Extra, the first time a shop buys.")}
+            {rule("repeatOrder", "Repeat order", "Extra, every later order.")}
+          </div>
+          <h2>Check-in rules</h2>
+          <label className="field">
+            Mark a check-in as far when it is more than this many metres from the shop
+            <input type="number" min="20" max="5000" value={far} disabled={!canEdit} onChange={(e) => setFar(e.target.value)} />
+            <small>Far check-ins are still saved. They are flagged so you can ask about them.</small>
+          </label>
+          <label className="field">
+            Competitor brands the team can tick, separated by commas
+            <input value={brands} disabled={!canEdit} onChange={(e) => setBrands(e.target.value)} />
+          </label>
+          {err && <p className="error">{err}</p>}
+          {canEdit && <button className="btn solid" disabled={busy}>Save settings</button>}
+        </form>
+        <div className="card">
+          <h2>Connections</h2>
+          <div className="rows">
+            {status.map(([label, on]) => (
+              <div key={label} className="row plain">
+                <span className="what"><b>{label}</b></span>
+                <span className={"pill " + (on ? "o-order" : "o-absent")}>{on ? "On" : "Not connected yet"}</span>
+              </div>
+            ))}
+          </div>
+          <p className="muted small">Connections are switched on in Vercel. The README file in the field folder lists the steps.</p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+/* ---------- Export tab ---------- */
+function ExportTab(ctx) {
+  const { data, users, shops, reps, visits, person, outcome, say } = ctx;
+  const [busy, setBusy] = useState(false);
+  const rows = useMemo(() => toRows(visits, shops, users, data.settings.points), [visits, shops, users, data.settings.points]);
+  const summary = useMemo(() => scoreboard(visits, person === "all" ? reps : reps.filter((r) => r.email === person), data.settings.points), [visits, reps, person, data.settings.points]);
+  const stamp = data.from === data.to ? data.from : `${data.from}_to_${data.to}`;
+  const filterLine =
+    `Dates: ${data.from === data.to ? data.from : data.from + " to " + data.to} · ` +
+    `Person: ${person === "all" ? "Everyone" : users[person] ? users[person].name : person} · ` +
+    `Outcome: ${outcome === "all" ? "All" : OUTCOMES[outcome]}`;
+
+  async function pdf() {
+    setBusy(true);
+    try {
+      await downloadPdf({ rows, summary, filterLine, name: `raymiyo-field-${stamp}.pdf` });
+    } catch (e) {
+      say("The PDF could not be made: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="shell single">
+      <section className="panel">
+        <div className="card">
+          <div>
+            <h2>Export check-ins</h2>
+            <p className="muted small">Pick the dates, person and outcome. The file contains exactly what the preview shows.</p>
+          </div>
+          <Filters {...ctx} withOutcome />
+          <div className="stats">
+            <div className="stat"><b>{rows.length}</b><span>Check-ins</span></div>
+            <div className="stat"><b>{rows.filter((r) => r.value > 0).length}</b><span>Orders</span></div>
+            <div className="stat hot"><b>{money(rows.reduce((t, r) => t + r.value, 0))}</b><span>Order value</span></div>
+          </div>
+          <div className="chips">
+            <button className="btn solid" disabled={busy || !rows.length} onClick={pdf}><Download size={16} /> {busy ? "Making the PDF…" : "Download PDF"}</button>
+            <button className="btn" disabled={!rows.length} onClick={() => downloadCsv(rows, `raymiyo-field-${stamp}.csv`)}><Download size={16} /> Download Excel file (CSV)</button>
+          </div>
+        </div>
+        <div className="card">
+          <h3>Preview</h3>
+          <div className="tablewrap">
+            <table>
+              <thead>
+                <tr><th>Date</th><th>Time</th><th>Person</th><th>Shop</th><th>Area</th><th>Outcome</th><th className="num">Order</th><th className="num">Pts</th></tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 100).map((r, i) => (
+                  <tr key={i}><td>{r.date}</td><td>{r.time}</td><td>{r.person}</td><td>{r.shop}</td><td>{r.area}</td><td>{r.outcome}</td><td className="num">{r.value ? money(r.value) : ""}</td><td className="num">{r.points}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!rows.length && <p className="muted">No check-ins for these filters.</p>}
+          {rows.length > 100 && <p className="muted small">Showing the first 100 of {rows.length}. The file has all of them.</p>}
+        </div>
+      </section>
+    </main>
+  );
+}
