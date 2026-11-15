@@ -9,6 +9,15 @@ export const OUTCOMES = {
   absent: "Owner absent",
 };
 
+// What should happen after each kind of check-in, and how many days later.
+// The field user can pick their own follow-up date; these are the defaults.
+export const NEXT_STEPS = {
+  order: { step: "Deliver order", days: 1 },
+  interested: { step: "Follow up", days: 3 },
+  absent: { step: "Revisit", days: 2 },
+  no: { step: "No action", days: 0 },
+};
+
 export const ROLES = {
   admin: "Admin",
   viewer: "Admin, view only",

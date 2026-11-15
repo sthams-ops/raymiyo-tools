@@ -115,6 +115,25 @@ ok((await call("visits", { as: "mijesh", method: "DELETE", query: { id: "../../e
 await call("admin", { as: "mijesh", method: "POST", body: { op: "saveUser", user: { email: EMAIL.divash, name: "Divash Shilpakar", role: "rep", active: false } } });
 ok((await call("state", { as: "divash" })).code === 401, "switched-off person is signed out");
 
+// next steps and follow-up dates
+{
+  const { addDays } = await import("../lib/time.js");
+  const today = nepal().date;
+  const mk = (extra) => call("visits", { as: "sajina", method: "POST", body: { shopName: "Follow Test " + Math.random(), lat: 27.7, lng: 85.3, ...extra } });
+  let f = await mk({ outcome: "interested" });
+  ok(f.data.visit.nextStep === "Follow up" && f.data.visit.followUp === addDays(today, 3), "interested shop gets a follow-up in 3 days");
+  f = await mk({ outcome: "absent", followUp: addDays(today, 5) });
+  ok(f.data.visit.nextStep === "Revisit" && f.data.visit.followUp === addDays(today, 5), "the field user's own date wins");
+  f = await mk({ outcome: "interested", followUp: "2020-01-01" });
+  ok(f.data.visit.followUp === addDays(today, 3), "a past follow-up date is ignored");
+  f = await mk({ outcome: "no" });
+  ok(f.data.visit.nextStep === "No action" && f.data.visit.followUp === "", "no follow-up when not interested");
+  f = await mk({ outcome: "order", value: 500, photo: "/photos/2026-11-15/abcd1234.jpg" });
+  ok(f.data.visit.nextStep === "Deliver order" && f.data.visit.photo.startsWith("/photos/"), "order gets a delivery step and keeps its photo");
+  ok((await mk({ outcome: "order", value: 500, photo: "/photos/../etc/passwd" })).data.visit.photo === "", "odd photo paths are dropped");
+  for (const [id, v] of Object.entries(await store.hall("field:visits:" + today.slice(0, 7)))) if (v.shopName.startsWith("Follow Test")) { await store.hdel("field:visits:" + today.slice(0, 7), id); await store.hdel("field:shops", v.shopId); }
+}
+
 // live tracking (Android app)
 {
   const now = Date.now();

@@ -120,6 +120,7 @@ export default function Rep({ data, reload, say }) {
         terms: draft.terms || "Cash",
         brands: draft.brands || [],
         note: draft.note || "",
+        followUp: draft.followUp || "",
         photo,
         lat: pos.lat,
         lng: pos.lng,
@@ -258,6 +259,12 @@ export default function Rep({ data, reload, say }) {
                 })}
               </div>
             </div>
+            {(draft.outcome === "interested" || draft.outcome === "absent") && (
+              <label className="field">
+                {draft.outcome === "interested" ? "Follow up on" : "Come back on"} (optional)
+                <input type="date" value={draft.followUp || ""} min={data.today} onChange={(e) => set({ followUp: e.target.value })} />
+              </label>
+            )}
             <label className="field">
               Note
               <textarea value={draft.note || ""} onChange={(e) => set({ note: e.target.value })} placeholder="What did the owner say?" maxLength={500} />

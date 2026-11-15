@@ -1,0 +1,227 @@
+// Zoho CRM function: field_shop_visit
+// Called by the Raymiyo Field app each time a check-in is saved, corrected or deleted.
+// It finds (or creates) the shop as an Account under "Kathmandu Raymiyo Trading Pvt Ltd",
+// updates the shop's stage and last contact date, and saves the Shop Visit record.
+//
+// Set up as a Standalone function with ONE argument:   crmAPIRequest   (type: String)
+// Return type: String. Then switch on REST API -> API Key for it.
+
+KTM_PARENT = "6482577000019816015";
+// CRM users by app email, so each visit is owned by the person who made it.
+// Add a line here when a new field user joins.
+owners = Map();
+owners.put("mijesh.shrestha@unijoynepal.com","6482577000000486001");
+owners.put("bivek.maharjan@unijoynepal.com","6482577000000992005");
+owners.put("divash.shilpakar@unijoynepal.com","6482577000000992025");
+owners.put("sajina@unijoynepal.com","6482577000008914001");
+
+outcomes = Map();
+outcomes.put("order","Order taken");
+outcomes.put("interested","Interested");
+outcomes.put("no","Not interested");
+outcomes.put("absent","Owner absent");
+
+out = Map();
+try
+{
+	req = crmAPIRequest.toMap();
+	p = req.get("params").get("payload").toMap();
+	action = ifnull(p.get("action"),"save");
+	visitKey = ifnull(p.get("visit_id"),"");
+	if(visitKey == "")
+	{
+		out.put("error","No visit id was sent.");
+		return out.toString();
+	}
+
+	// ---- Is this check-in already in CRM? ----
+	visitId = ifnull(p.get("crm_visit_id"),"");
+	if(visitId == "")
+	{
+		try
+		{
+			old = zoho.crm.searchRecords("Shop_Visits","(Visit_ID:equals:" + visitKey + ")");
+			if(old.size() > 0)
+			{
+				visitId = old.get(0).get("id").toString();
+			}
+		}
+		catch (e1)
+		{
+		}
+	}
+	accId = ifnull(p.get("crm_account_id"),"");
+	stage = ifnull(p.get("shop_stage"),"");
+
+	// ---- An admin deleted the check-in in the app ----
+	if(action == "cancel")
+	{
+		if(visitId != "")
+		{
+			c = Map();
+			c.put("Cancelled",true);
+			c.put("Order_Value",0);
+			c.put("Points",0);
+			c.put("Next_Step","No action");
+			c.put("Follow_up_Done",true);
+			zoho.crm.updateRecord("Shop_Visits",visitId.toLong(),c);
+		}
+		if(accId != "" && stage != "")
+		{
+			zoho.crm.updateRecord("Accounts",accId.toLong(),{"Shop_Stage":stage});
+		}
+		out.put("visit_id",visitId);
+		out.put("account_id",accId);
+		return out.toString();
+	}
+
+	shopName = ifnull(p.get("shop_name"),"Shop");
+	visitDate = p.get("date");
+	repEmail = ifnull(p.get("rep_email"),"");
+	ownerId = owners.get(repEmail);
+	shopType = if(p.get("shop_type") == "Wholesaler","Wholeseller","Retailer");
+
+	// ---- Find the shop's Account, or create it ----
+	if(accId == "" && !shopName.contains("(") && !shopName.contains(")") && !shopName.contains(","))
+	{
+		try
+		{
+			found = zoho.crm.searchRecords("Accounts","(Account_Name:equals:" + shopName + ")");
+			for each  a in found
+			{
+				par = a.get("Parent_Account");
+				if(accId == "" && par != null && par.get("id").toString() == KTM_PARENT)
+				{
+					accId = a.get("id").toString();
+				}
+			}
+		}
+		catch (e2)
+		{
+		}
+	}
+	if(accId == "")
+	{
+		acc = Map();
+		acc.put("Account_Name",shopName);
+		acc.put("Parent_Account",KTM_PARENT);
+		acc.put("Account_Type",shopType);
+		acc.put("Scope","B2B");
+		acc.put("Area","Kathmandu");
+		acc.put("Billing_City","Kathmandu");
+		acc.put("Billing_Street",ifnull(p.get("shop_area"),""));
+		acc.put("Active",true);
+		phone = ifnull(p.get("shop_phone"),"");
+		if(phone != "")
+		{
+			if(phone.length() == 10 && phone.startsWith("9"))
+			{
+				phone = "+977 " + phone;
+			}
+			acc.put("Phone",phone);
+		}
+		if(stage != "")
+		{
+			acc.put("Shop_Stage",stage);
+		}
+		if(ownerId != null)
+		{
+			acc.put("Owner",ownerId);
+		}
+		acc.put("Description","Added from the Raymiyo Field app by " + ifnull(p.get("rep_name"),repEmail) + " on " + visitDate + ".");
+		made = zoho.crm.createRecord("Accounts",acc);
+		if(made.get("id") != null)
+		{
+			accId = made.get("id").toString();
+		}
+		else if(made.get("code") == "DUPLICATE_DATA" && made.get("details") != null && made.get("details").get("id") != null)
+		{
+			accId = made.get("details").get("id").toString();
+		}
+		else
+		{
+			out.put("error","Could not create the shop in Accounts: " + made.toString());
+			return out.toString();
+		}
+	}
+
+	// ---- Keep the shop's Account up to date ----
+	accUpd = Map();
+	accUpd.put("Last_Contact_Date",visitDate);
+	if(stage != "")
+	{
+		accUpd.put("Shop_Stage",stage);
+	}
+	terms = ifnull(p.get("payment_terms"),"");
+	if(p.get("outcome") == "order" && terms != "")
+	{
+		accUpd.put("Payment_Terms",terms);
+	}
+	zoho.crm.updateRecord("Accounts",accId.toLong(),accUpd);
+
+	// ---- Save the Shop Visit ----
+	outcomeLabel = ifnull(outcomes.get(p.get("outcome")),"Interested");
+	title = shopName + " - " + visitDate + " - " + outcomeLabel;
+	if(title.length() > 118)
+	{
+		title = title.subString(0,118);
+	}
+	v = Map();
+	v.put("Name",title);
+	v.put("Shop",accId);
+	v.put("Visit_Date",visitDate);
+	v.put("Visit_Time",ifnull(p.get("time"),""));
+	v.put("Outcome",outcomeLabel);
+	v.put("Order_Value",ifnull(p.get("order_value"),0));
+	v.put("Payment_Terms",if(terms == "",null,terms));
+	v.put("Next_Step",ifnull(p.get("next_step"),"No action"));
+	follow = ifnull(p.get("follow_up_date"),"");
+	v.put("Next_Follow_up_Date",if(follow == "",null,follow));
+	v.put("Visit_Notes",ifnull(p.get("note"),""));
+	v.put("Competitor_Brands",ifnull(p.get("brands"),""));
+	v.put("New_Shop",ifnull(p.get("new_shop"),false));
+	v.put("First_Order",ifnull(p.get("first_order"),false));
+	v.put("Shop_Stage_After_Visit",stage);
+	v.put("Shop_Type",ifnull(p.get("shop_type"),""));
+	v.put("Area",ifnull(p.get("shop_area"),""));
+	v.put("Points",ifnull(p.get("points"),0));
+	v.put("Away_From_Shop",ifnull(p.get("away_from_shop"),false));
+	v.put("Distance_From_Shop_m",ifnull(p.get("distance_m"),0));
+	v.put("Map_Link",ifnull(p.get("map_url"),""));
+	photo = ifnull(p.get("photo_url"),"");
+	if(photo != "")
+	{
+		v.put("Shelf_Photo",photo);
+	}
+	v.put("Latitude",p.get("latitude"));
+	v.put("Longitude",p.get("longitude"));
+	v.put("Visit_ID",visitKey);
+	v.put("Cancelled",false);
+	if(ownerId != null)
+	{
+		v.put("Owner",ownerId);
+	}
+	if(visitId != "")
+	{
+		saved = zoho.crm.updateRecord("Shop_Visits",visitId.toLong(),v);
+	}
+	else
+	{
+		saved = zoho.crm.createRecord("Shop_Visits",v);
+	}
+	if(saved.get("id") != null)
+	{
+		out.put("visit_id",saved.get("id").toString());
+		out.put("account_id",accId);
+	}
+	else
+	{
+		out.put("error","Could not save the Shop Visit: " + saved.toString());
+		out.put("account_id",accId);
+	}
+}
+catch (e)
+{
+	out.put("error","Function error: " + e.toString());
+}
+return out.toString();

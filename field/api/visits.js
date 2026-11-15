@@ -3,11 +3,11 @@
 //   PATCH   correct a check-in (admin only)
 //   DELETE  remove a check-in (admin only)
 import { store } from "../lib/store.js";
-import { guard, readBody, clean, fail, rid } from "../lib/auth.js";
+import { guard, loadUsers, readBody, clean, fail, rid } from "../lib/auth.js";
 import { loadSettings, stageFor } from "../lib/data.js";
-import { nepal } from "../lib/time.js";
-import { syncVisit } from "../lib/crm.js";
-import { OUTCOMES, distanceMeters } from "../shared/rules.js";
+import { nepal, addDays, isDate } from "../lib/time.js";
+import { syncVisit, cancelVisit } from "../lib/crm.js";
+import { OUTCOMES, NEXT_STEPS, distanceMeters, visitPoints } from "../shared/rules.js";
 
 const TERMS = ["Cash", "Credit (Cheque)"];
 const bad = (res, msg) => res.status(400).json({ error: msg });
@@ -20,6 +20,28 @@ function readOrder(b, res) {
     return null;
   }
   return { value, terms: TERMS.includes(b.terms) ? b.terms : "Cash" };
+}
+
+// The next step for a check-in and the date it is due. A date picked by the
+// field user wins when it is in the future (at most 60 days ahead).
+function followUp(outcome, date, picked) {
+  const rule = NEXT_STEPS[outcome] || NEXT_STEPS.no;
+  if (!rule.days) return { nextStep: rule.step, followUp: "" };
+  const ok = isDate(picked) && picked > date && picked <= addDays(date, 60);
+  return { nextStep: rule.step, followUp: ok ? picked : addDays(date, rule.days) };
+}
+
+async function pushToCrm(key, visit, shop, user, settings) {
+  const sync = await syncVisit(visit, shop, user, visitPoints(visit, settings.points));
+  if (sync.status === "off") return;
+  visit.crm = sync.status;
+  visit.crmError = sync.detail ? clean(sync.detail, 200) : "";
+  if (sync.visitCrmId) visit.crmId = sync.visitCrmId;
+  await store.hset(key, visit.id, visit);
+  if (sync.accountCrmId && shop && !shop.crmId) {
+    shop.crmId = sync.accountCrmId;
+    await store.hset("field:shops", shop.id, shop);
+  }
 }
 
 export default async function handler(req, res) {
@@ -77,7 +99,7 @@ async function create(req, res) {
 
   const distance = newShop ? 0 : distanceMeters([lat, lng], [shop.lat, shop.lng]);
   const brands = Array.isArray(b.brands) ? b.brands.map((x) => clean(x, 30)).filter((x) => settings.brands.includes(x)) : [];
-  const photo = typeof b.photo === "string" && /^https:\/\/[^\s]+$/.test(b.photo) ? b.photo.slice(0, 400) : "";
+  const photo = typeof b.photo === "string" && /^(https:\/\/[^\s]+|\/photos\/[\w\-\/]+\.jpg)$/.test(b.photo) ? b.photo.slice(0, 400) : "";
   const visit = {
     id: `${date}-${rid(5)}`,
     date,
@@ -100,6 +122,7 @@ async function create(req, res) {
     newShop,
     first: false,
     crm: "off",
+    ...followUp(b.outcome, date, b.followUp),
   };
   if (visit.outcome === "order") {
     visit.first = shop.orders === 0;
@@ -115,17 +138,7 @@ async function create(req, res) {
   const day = (await store.hget("field:day:" + date, me.email)) || { start: time };
   await store.hset("field:day:" + date, me.email, { ...day, end: "", lat, lng, at: time });
 
-  const sync = await syncVisit(visit, shop, me);
-  if (sync.status !== "off") {
-    visit.crm = sync.status;
-    if (sync.detail) visit.crmError = clean(sync.detail, 200);
-    if (sync.visitCrmId) visit.crmId = sync.visitCrmId;
-    await store.hset("field:visits:" + month, visit.id, visit);
-    if (sync.accountCrmId && !shop.crmId) {
-      shop.crmId = sync.accountCrmId;
-      await store.hset("field:shops", shop.id, shop);
-    }
-  }
+  await pushToCrm("field:visits:" + month, visit, shop, me, settings);
   res.json({ visit, shop });
 }
 
@@ -162,7 +175,11 @@ async function update(req, res) {
   visit.terms = order.terms;
   visit.note = clean(b.note, 500);
   visit.editedBy = me.email;
+  Object.assign(visit, followUp(visit.outcome, visit.date, visit.followUp));
   await store.hset(key, visit.id, visit);
+  // Keep Zoho CRM in step with the correction.
+  const users = await loadUsers();
+  await pushToCrm(key, visit, shop || { id: visit.shopId, name: visit.shopName, area: visit.area }, users[visit.rep] || { email: visit.rep, name: visit.rep }, await loadSettings());
   res.json({ visit });
 }
 
@@ -179,5 +196,6 @@ async function remove(req, res) {
     await store.hset("field:shops", shop.id, shop);
   }
   await store.hdel(key, visit.id);
+  await cancelVisit(visit, shop);
   res.json({ ok: true });
 }

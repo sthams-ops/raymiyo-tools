@@ -71,10 +71,15 @@ The Settings tab in the app shows which connections are on.
 
 ## Zoho CRM
 
-Each saved check-in is sent to a Zoho CRM function when `ZOHO_FIELD_API_KEY` is set (`lib/crm.js`).
-The function receives one argument, `payload`, with the check-in as JSON text, and should create the shop
-as an Account under "Kathmandu Raymiyo Trading Pvt Ltd" if it is new, then create the Shop Visit record.
-Until the key is set, check-ins are kept in the app only.
+Each saved, corrected or deleted check-in is sent to a Zoho CRM function when `ZOHO_FIELD_API_KEY`
+is set (`lib/crm.js`). The function's code is kept in `crm/field_shop_visit.dg`. It:
+
+- finds the shop's Account under "Kathmandu Raymiyo Trading Pvt Ltd", or creates it,
+- updates the Account's Shop Stage, Last Contact Date and Payment Terms,
+- creates (or updates) one record in the **Shop Visits** module, owned by the person who visited.
+
+To change what is saved, edit the function in CRM (Setup → Developer Hub → Functions) and keep the
+copy in `crm/` the same. Until the key is set, check-ins are kept in the app only.
 
 ## Where things are
 
@@ -82,6 +87,7 @@ Until the key is set, check-ins are kept in the app only.
 field/
   api/        one file per server job (sign-in, state, check-ins, shops, day, admin, tv, photo)
   lib/        storage, sign-in and role checks, Nepal time, CRM sync
+  crm/        the Zoho CRM function that receives check-ins
   shared/     rules used by both server and screens (points, outcomes, roles, colours)
   src/        the screens: App (sign-in), Rep (field user), Admin, TV, MapView, export (PDF/CSV)
   src/styles.css   all colours and fonts, set once at the top

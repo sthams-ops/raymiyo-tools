@@ -18,6 +18,8 @@ export function toRows(visits, shops, users, points) {
       terms: v.terms || "",
       brands: (v.brands || []).join(", "),
       note: v.note || "",
+      next: v.nextStep || "",
+      followUp: v.followUp || "",
       points: visitPoints(v, points),
       gps: `${v.lat.toFixed(5)}, ${v.lng.toFixed(5)}`,
       far: v.far ? "Yes" : "",
@@ -36,8 +38,8 @@ function save(blob, name) {
 }
 
 export function downloadCsv(rows, name) {
-  const cols = ["date", "time", "person", "shop", "area", "type", "outcome", "value", "terms", "brands", "note", "points", "gps", "far"];
-  const head = ["Date", "Time", "Person", "Shop", "Area", "Shop type", "Outcome", "Order (Rs)", "Payment", "Brands on shelf", "Note", "Points", "GPS", "Far from shop"];
+  const cols = ["date", "time", "person", "shop", "area", "type", "outcome", "value", "terms", "brands", "note", "next", "followUp", "points", "gps", "far"];
+  const head = ["Date", "Time", "Person", "Shop", "Area", "Shop type", "Outcome", "Order (Rs)", "Payment", "Brands on shelf", "Note", "Next step", "Follow up on", "Points", "GPS", "Far from shop"];
   const cell = (x) => `"${String(x == null ? "" : x).replace(/"/g, '""')}"`;
   const text = [head.map(cell).join(","), ...rows.map((r) => cols.map((c) => cell(r[c])).join(","))].join("\r\n");
   save(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }), name);

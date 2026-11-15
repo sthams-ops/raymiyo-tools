@@ -94,6 +94,15 @@ export function VisitFacts({ v, shop, user, points }) {
           </dd>
         </>
       )}
+      {v.nextStep && v.nextStep !== "No action" && (
+        <>
+          <dt>Next step</dt>
+          <dd>
+            {v.nextStep}
+            {v.followUp ? " by " + fmtDay(v.followUp) : ""}
+          </dd>
+        </>
+      )}
       {v.brands && v.brands.length > 0 && (
         <>
           <dt>On the shelf</dt>

@@ -32,3 +32,10 @@ export function monthsBetween(from, to) {
   }
   return out;
 }
+
+// "2026-11-15" plus 3 days -> "2026-11-18".
+export function addDays(date, days) {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
