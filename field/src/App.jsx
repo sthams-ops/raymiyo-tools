@@ -1,6 +1,6 @@
 // Entry screen: decides between sign-in, the field screen, the admin screen and the TV.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LogOut, RefreshCw } from "lucide-react";
+import { Download, LogOut, RefreshCw } from "lucide-react";
 import { api } from "./api.js";
 import Rep from "./Rep.jsx";
 import Admin from "./Admin.jsx";
@@ -28,6 +28,23 @@ function Signed() {
   const [spinning, setSpinning] = useState(false);
   const range = useRef(null);
   const toastTimer = useRef(null);
+  const [installer, setInstaller] = useState(null);
+
+  // Android and desktop Chrome offer an install prompt; show a button for it.
+  // iPhones have no such prompt: people use Share, then Add to Home Screen.
+  useEffect(() => {
+    const onPrompt = (e) => {
+      e.preventDefault();
+      setInstaller(e);
+    };
+    const onInstalled = () => setInstaller(null);
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
 
   const say = useCallback((text) => {
     setToast(text);
@@ -85,6 +102,11 @@ function Signed() {
       <header className="top">
         <div className="brand">Raymiyo Field<span>Kathmandu direct sales</span></div>
         <div className="me">
+          {installer && (
+            <button className="btn small" onClick={async () => { installer.prompt(); await installer.userChoice.catch(() => {}); setInstaller(null); }}>
+              <Download size={15} /> Install app
+            </button>
+          )}
           <button className="icon" aria-label="Refresh" onClick={async () => { setSpinning(true); await reload(); setSpinning(false); }}>
             <RefreshCw size={18} className={spinning ? "spin" : ""} />
           </button>

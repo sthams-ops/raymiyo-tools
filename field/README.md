@@ -10,6 +10,15 @@ GPS check-in app for the Kathmandu direct sales team.
 Built the same way as the Huddle Board: React + Vite on Vercel, Upstash Redis for storage, Zoho sign-in.
 Map: MapLibre with OpenFreeMap tiles (open source, no key, no bill). Icons: Lucide. PDF: jsPDF.
 
+## Install on a phone (no App Store or Play Store)
+
+The app installs straight from its web address and then opens full screen with its own icon.
+
+- **Android (Chrome):** open the address, tap **Install app** at the top of the screen, or the three dots menu → **Add to Home screen**.
+- **iPhone (Safari):** open the address, tap the **Share** button → **Add to Home Screen** → **Add**.
+
+Updates arrive by themselves; nobody has to reinstall. Files: `public/manifest.webmanifest`, `public/sw.js` and the icons in `public/`.
+
 ## Things the admin changes inside the app (no code)
 
 | What | Where |

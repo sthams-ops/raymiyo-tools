@@ -178,11 +178,11 @@ th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spa
 .map-pin.o-no span { background: var(--bad); }
 .map-pin.o-absent span { background: var(--idle); }
 .map-pin.on { z-index: 3; }
-.map-pin.on span { box-shadow: 0 0 0 3px var(--rep), 0 0 0 7px var(--ink); }
+.map-pin.on span { box-shadow: 0 0 0 3px var(--rep), 0 0 0 7px #111b2e; }
 .map-live { position: relative; width: 40px; height: 40px; }
 .map-live .pulse { position: absolute; inset: -10px; border-radius: 50%; background: var(--rep); opacity: 0.25; }
 .map-live .face { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 50%; background: var(--rep); border: 4px solid #fff; color: #fff; font-weight: 800; box-shadow: 0 6px 14px rgba(17, 27, 46, 0.35); }
-.map-live .tag { position: absolute; left: 50%; top: 44px; transform: translateX(-50%); padding: 3px 8px; border-radius: 99px; background: var(--ink); color: #fff; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.map-live .tag { position: absolute; left: 50%; top: 44px; transform: translateX(-50%); padding: 3px 8px; border-radius: 99px; background: #111b2e; color: #fff; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
 @media (prefers-reduced-motion: no-preference) {
   .map-live .pulse { animation: pulse 2.2s ease-out infinite; }
   @keyframes pulse { 0% { transform: scale(0.6); opacity: 0.4; } 100% { transform: scale(1.5); opacity: 0; } }
