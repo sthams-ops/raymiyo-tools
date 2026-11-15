@@ -1,6 +1,6 @@
 // Entry screen: decides between sign-in, the field screen, the admin screen and the TV.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, LogOut, RefreshCw } from "lucide-react";
+import { Download, LogOut, RefreshCw, Smartphone } from "lucide-react";
 import { api } from "./api.js";
 import Rep from "./Rep.jsx";
 import Admin from "./Admin.jsx";
@@ -29,6 +29,7 @@ function Signed() {
   const range = useRef(null);
   const toastTimer = useRef(null);
   const [installer, setInstaller] = useState(null);
+  const [tryField, setTryField] = useState(false); // admin only: see and test the field screen
 
   // Android and desktop Chrome offer an install prompt; show a button for it.
   // iPhones have no such prompt: people use Share, then Add to Home Screen.
@@ -107,6 +108,11 @@ function Signed() {
               <Download size={15} /> Install app
             </button>
           )}
+          {me.role === "admin" && (
+            <button className="btn small" onClick={() => setTryField((v) => !v)}>
+              <Smartphone size={15} /> {tryField ? "Back to admin" : "Try field screen"}
+            </button>
+          )}
           <button className="icon" aria-label="Refresh" onClick={async () => { setSpinning(true); await reload(); setSpinning(false); }}>
             <RefreshCw size={18} className={spinning ? "spin" : ""} />
           </button>
@@ -118,7 +124,7 @@ function Signed() {
           <a className="icon" href="/api/auth?action=logout" aria-label="Sign out"><LogOut size={18} /></a>
         </div>
       </header>
-      {me.role === "rep" ? <Rep data={data} reload={reload} say={say} /> : <Admin data={data} reload={reload} setRange={setRange} say={say} />}
+      {me.role === "rep" || (me.role === "admin" && tryField) ? <Rep data={data} reload={reload} say={say} /> : <Admin data={data} reload={reload} setRange={setRange} say={say} />}
       <Toast text={toast} />
     </>
   );

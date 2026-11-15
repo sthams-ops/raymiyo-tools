@@ -25,7 +25,7 @@ export default function Rep({ data, reload, say }) {
 
   const users = useMemo(() => indexBy(data.users, "email"), [data.users]);
   const shops = useMemo(() => indexBy(data.shops, "id"), [data.shops]);
-  const todays = useMemo(() => data.visits.filter((v) => v.date === data.today), [data.visits, data.today]);
+  const todays = useMemo(() => data.visits.filter((v) => v.date === data.today && v.rep === me.email), [data.visits, data.today, me.email]);
   const mine = data.board.today.find((r) => r.email === me.email) || { visits: 0, orders: 0, points: 0 };
   const mapData = useMemo(
     () => buildMapData({ visits: todays, shops: data.shops.filter((s) => s.owner === me.email), users: data.users, days: data.days }),
