@@ -17,6 +17,7 @@ function target() {
   }
 }
 
+const round6 = (n) => (Number.isFinite(Number(n)) && n !== null && n !== "" ? Math.round(Number(n) * 1e6) / 1e6 : null);
 export const crmEnabled = () => !!target();
 
 const appUrl = () => (process.env.FIELD_APP_URL || "").replace(/\/$/, "");
@@ -73,8 +74,8 @@ export function syncVisit(visit, shop, user, points = 0) {
     distance_m: visit.distance || 0,
     photo_url: photo,
     map_url: `https://www.google.com/maps?q=${visit.lat},${visit.lng}`,
-    latitude: visit.lat,
-    longitude: visit.lng,
+    latitude: round6(visit.lat),
+    longitude: round6(visit.lng),
   });
 }
 

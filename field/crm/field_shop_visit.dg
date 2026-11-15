@@ -193,8 +193,13 @@ try
 	{
 		v.put("Shelf_Photo",photo);
 	}
-	v.put("Latitude",p.get("latitude"));
-	v.put("Longitude",p.get("longitude"));
+	lat = ifnull(p.get("latitude"),"");
+	lng = ifnull(p.get("longitude"),"");
+	if(lat != "" && lng != "")
+	{
+		v.put("Latitude",lat.toString().toDecimal().round(6));
+		v.put("Longitude",lng.toString().toDecimal().round(6));
+	}
 	v.put("Visit_ID",visitKey);
 	v.put("Cancelled",false);
 	if(ownerId != null)
