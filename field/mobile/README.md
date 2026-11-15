@@ -16,7 +16,7 @@ GitHub builds it. Nothing needs installing on a computer.
 2. A few minutes later the signed file appears under **Releases** as
    `Raymiyo-Field.apk`. This link always gives the newest one:
    `https://github.com/sthams-ops/raymiyo-tools/releases/latest/download/Raymiyo-Field.apk`
-3. Send the file to the phone and open it. It installs over the old app.
+3. Send the file to the phone (WhatsApp works) and open it. It installs over the old app.
 
 Most changes never need a new file: the screens come from the website, so
 updating the website updates the app. A new file is only needed when something
