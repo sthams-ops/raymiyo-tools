@@ -1,5 +1,5 @@
 // Sends each saved check-in to Zoho CRM.
-// It stays switched off until ZOHO_FIELD_API_KEY is set in Vercel. The value is
+// It stays switched off until ZOHO_FIELD_API_KEY is set on the host. The value is
 // the REST API URL of the CRM function that creates the Shop Visit record, the
 // same way ZOHO_TV_API_KEY works for the TV board. The function receives one
 // argument, "payload", holding the check-in as JSON text.

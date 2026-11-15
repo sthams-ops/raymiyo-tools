@@ -5,13 +5,14 @@
 // Only people on the Team list with a company email get in.
 import { store } from "../lib/store.js";
 import { DOMAIN, loadUsers, rid, setCookie, getCookie, fail } from "../lib/auth.js";
+import { HOSTED, HTTPS } from "../lib/host.js";
 
 const SESSION_SECONDS = 60 * 60 * 24 * 30;
 
 function appUrl(req) {
   if (process.env.FIELD_APP_URL) return process.env.FIELD_APP_URL.replace(/\/$/, "");
   const host = req.headers["x-forwarded-host"] || req.headers.host;
-  return `${process.env.VERCEL ? "https" : "http"}://${host}`;
+  return `${HTTPS ? "https" : "http"}://${host}`;
 }
 
 async function startSession(res, email) {
@@ -89,8 +90,8 @@ export default async function handler(req, res) {
       return;
     }
 
-    // Laptop testing only. Never available on Vercel.
-    if (action === "dev" && process.env.FIELD_DEV_LOGIN === "1" && !process.env.VERCEL) {
+    // Laptop testing only. Never available when hosted.
+    if (action === "dev" && process.env.FIELD_DEV_LOGIN === "1" && !HOSTED) {
       const users = await loadUsers();
       const email = String(req.query.email || "").toLowerCase();
       if (!users[email]) return res.status(404).json({ error: "No such user" });

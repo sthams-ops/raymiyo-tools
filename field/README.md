@@ -7,7 +7,7 @@ GPS check-in app for the Kathmandu direct sales team.
 - **Admin, view only** sees everything the admin sees and can change nothing.
 - **Office TV** shows the map and leaderboard at `/tv?key=...` with no sign-in.
 
-Built the same way as the Huddle Board: React + Vite on Vercel, Upstash Redis for storage, Zoho sign-in.
+React + Vite, a small Node server (`server.mjs`), Redis for storage, Zoho sign-in. Runs on Railway (current plan) or Vercel.
 Map: MapLibre with OpenFreeMap tiles (open source, no key, no bill). Icons: Lucide. PDF: jsPDF.
 
 ## Install on a phone (no App Store or Play Store)
@@ -33,7 +33,18 @@ Updates arrive by themselves; nobody has to reinstall. Files: `public/manifest.w
 
 Only `@unijoynepal.com` emails can be added. The owner account (`mijesh.shrestha@unijoynepal.com`) always stays an active admin so nobody can lock the app.
 
-## Go live (one time)
+## Go live on Railway (one time)
+
+1. **Railway**: New Project → Deploy from GitHub repo → `raymiyo-tools` → in the service Settings set **Root Directory** to `field`. Railway builds with `npm run build` and starts with `npm start` by itself.
+2. **Storage**: in the same project add a **Redis** database, then on the app service add the variable `REDIS_URL` = `${{Redis.REDIS_URL}}`. (Or use the Upstash keys instead: `KV_REST_API_URL` and `KV_REST_API_TOKEN`.)
+3. **Address**: service → Settings → Networking → Generate Domain (or add your own domain).
+4. **Sign-in**: add `ZOHO_CLIENT_ID` and `ZOHO_CLIENT_SECRET`, and in the Zoho API Console add `https://YOUR-DOMAIN/api/auth?action=callback` to the Authorized Redirect URIs.
+5. **TV**: add `FIELD_TV_KEY` (12 or more characters). The TV opens `https://YOUR-DOMAIN/tv?key=THAT-PHRASE`.
+6. **Photos (optional)**: add a Volume to the app service mounted at `/data`, then set `PHOTO_DIR=/data/photos`.
+
+Same variables as the table below; `BLOB_READ_WRITE_TOKEN` is not needed on Railway.
+
+## Go live on Vercel (alternative)
 
 1. **Vercel**: Add New → Project → import `raymiyo-tools` → set **Root Directory** to `field` → Deploy.
 2. **Storage**: connect the same Upstash Redis store the Huddle Board uses to this project. That adds `KV_REST_API_URL` and `KV_REST_API_TOKEN`. Field data uses its own `field:` keys and never touches Huddle data.
@@ -42,11 +53,13 @@ Only `@unijoynepal.com` emails can be added. The owner account (`mijesh.shrestha
 4. **TV**: add `FIELD_TV_KEY` with any private phrase of 12 or more characters. The TV opens `https://YOUR-DOMAIN/tv?key=THAT-PHRASE`.
 5. Redeploy after adding the settings.
 
-### Settings in Vercel (Environment Variables)
+### Settings (Environment Variables)
 
 | Name | Needed | What it is |
 | --- | --- | --- |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Yes | Upstash Redis storage |
+| `REDIS_URL` | Yes (Railway) | Redis connection from the Railway Redis database |
+| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Instead of `REDIS_URL` | Upstash Redis storage |
+| `PHOTO_DIR` | For photos on Railway | Folder on a Volume, e.g. `/data/photos` |
 | `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` | Yes | Zoho sign-in |
 | `FIELD_TV_KEY` | For the TV | Private phrase in the TV link |
 | `BLOB_READ_WRITE_TOKEN` | For photos | Added automatically when a Vercel Blob store is connected |
@@ -72,6 +85,7 @@ field/
   shared/     rules used by both server and screens (points, outcomes, roles, colours)
   src/        the screens: App (sign-in), Rep (field user), Admin, TV, MapView, export (PDF/CSV)
   src/styles.css   all colours and fonts, set once at the top
+  server.mjs  the server Railway runs
   scripts/    test.mjs (rule checks) and local-server.mjs (run on a laptop)
 ```
 
@@ -92,4 +106,4 @@ The laptop mode keeps data in memory and the dev sign-in never works on Vercel.
 
 - Location is saved when a person taps Start day, Check in or End day. A web app cannot follow a phone continuously in the background.
 - PDF text uses a standard font; notes typed in Devanagari will not print correctly in the PDF (the CSV keeps them).
-- Vercel's Hobby plan is for personal use; move the account to Pro for business tools.
+- Vercel's Hobby plan is for personal use and was paused for going over its limit; Railway is the current host.

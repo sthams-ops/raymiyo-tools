@@ -5,6 +5,10 @@ import assert from "node:assert/strict";
 delete process.env.KV_REST_API_URL;
 delete process.env.KV_REST_API_TOKEN;
 delete process.env.VERCEL;
+delete process.env.REDIS_URL;
+delete process.env.RAILWAY_ENVIRONMENT;
+delete process.env.RAILWAY_PROJECT_ID;
+delete process.env.FIELD_HTTPS;
 
 const { store } = await import("../lib/store.js");
 const { monthsBetween, weekStart, nepal } = await import("../lib/time.js");

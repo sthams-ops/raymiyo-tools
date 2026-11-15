@@ -51,7 +51,7 @@ export default async function handler(req, res) {
       domain: DOMAIN,
       features: {
         crm: crmEnabled(),
-        photos: !!process.env.BLOB_READ_WRITE_TOKEN,
+        photos: !!(process.env.PHOTO_DIR || process.env.BLOB_READ_WRITE_TOKEN),
         tv: !!process.env.FIELD_TV_KEY,
       },
     });

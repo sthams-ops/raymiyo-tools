@@ -4,6 +4,7 @@
 import crypto from "node:crypto";
 import { store } from "./store.js";
 import { COLORS } from "../shared/rules.js";
+import { HTTPS } from "./host.js";
 
 export const DOMAIN = (process.env.FIELD_DOMAIN || "unijoynepal.com").toLowerCase();
 // The owner can never be removed or downgraded, so the app cannot lock everyone out.
@@ -38,7 +39,7 @@ export function getCookie(req, name) {
 }
 
 export function setCookie(res, name, value, maxAgeSeconds) {
-  const secure = process.env.VERCEL ? "; Secure" : "";
+  const secure = HTTPS ? "; Secure" : "";
   res.setHeader("Set-Cookie", `${name}=${encodeURIComponent(value)}; Max-Age=${maxAgeSeconds}; HttpOnly; SameSite=Lax; Path=/${secure}`);
 }
 
