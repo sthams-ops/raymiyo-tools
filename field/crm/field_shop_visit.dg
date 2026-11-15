@@ -53,6 +53,17 @@ try
 	accId = ifnull(p.get("crm_account_id"),"");
 	stage = ifnull(p.get("shop_stage"),"");
 
+	// ---- The follow-up was ticked off in the app ----
+	if(action == "done")
+	{
+		if(visitId != "")
+		{
+			zoho.crm.updateRecord("Shop_Visits",visitId.toLong(),{"Follow_up_Done":true});
+		}
+		out.put("visit_id",visitId);
+		return out.toString();
+	}
+
 	// ---- An admin deleted the check-in in the app ----
 	if(action == "cancel")
 	{
@@ -80,6 +91,13 @@ try
 	repEmail = ifnull(p.get("rep_email"),"");
 	ownerId = owners.get(repEmail);
 	shopType = if(p.get("shop_type") == "Wholesaler","Wholeseller","Retailer");
+	// Phone: the app sends digits only. CRM keeps mobiles as "+977 98XXXXXXXX".
+	phoneRaw = ifnull(p.get("shop_phone"),"").toString();
+	phone = phoneRaw;
+	if(phoneRaw.length() == 10 && phoneRaw.startsWith("9"))
+	{
+		phone = "+977 " + phoneRaw;
+	}
 
 	// ---- Find the shop's Account, or create it ----
 	if(accId == "" && !shopName.contains("(") && !shopName.contains(")") && !shopName.contains(","))
@@ -100,6 +118,34 @@ try
 		{
 		}
 	}
+	// ---- Same phone number already in Accounts? Then it is the same shop. ----
+	if(accId == "" && phoneRaw.length() >= 7)
+	{
+		tries = List();
+		tries.add(phone);
+		tries.add(phoneRaw);
+		for each  t in tries
+		{
+			if(accId == "")
+			{
+				try
+				{
+					hits = zoho.crm.searchRecords("Accounts","(Phone:equals:" + t + ")");
+					for each  h in hits
+					{
+						hp = ifnull(h.get("Phone"),"").toString().replaceAll("[^0-9]","");
+						if(accId == "" && hp.endsWith(phoneRaw))
+						{
+							accId = h.get("id").toString();
+						}
+					}
+				}
+				catch (e3)
+				{
+				}
+			}
+		}
+	}
 	if(accId == "")
 	{
 		acc = Map();
@@ -111,13 +157,8 @@ try
 		acc.put("Billing_City","Kathmandu");
 		acc.put("Billing_Street",ifnull(p.get("shop_area"),""));
 		acc.put("Active",true);
-		phone = ifnull(p.get("shop_phone"),"");
 		if(phone != "")
 		{
-			if(phone.length() == 10 && phone.startsWith("9"))
-			{
-				phone = "+977 " + phone;
-			}
 			acc.put("Phone",phone);
 		}
 		if(stage != "")
@@ -161,7 +202,7 @@ try
 
 	// ---- Save the Shop Visit ----
 	outcomeLabel = ifnull(outcomes.get(p.get("outcome")),"Interested");
-	title = shopName + " - " + visitDate + " - " + outcomeLabel;
+	title = shopName;
 	if(title.length() > 118)
 	{
 		title = title.subString(0,118);
@@ -169,6 +210,7 @@ try
 	v = Map();
 	v.put("Name",title);
 	v.put("Shop",accId);
+	v.put("Shop_Phone",if(phone == "",null,phone));
 	v.put("Visit_Date",visitDate);
 	v.put("Visit_Time",ifnull(p.get("time"),""));
 	v.put("Outcome",outcomeLabel);
@@ -218,6 +260,18 @@ try
 	{
 		out.put("visit_id",saved.get("id").toString());
 		out.put("account_id",accId);
+		// A new visit closes the follow-up the shop was waiting for.
+		doneId = ifnull(p.get("done_crm_visit_id"),"").toString();
+		if(doneId != "" && doneId != saved.get("id").toString())
+		{
+			try
+			{
+				zoho.crm.updateRecord("Shop_Visits",doneId.toLong(),{"Follow_up_Done":true});
+			}
+			catch (e4)
+			{
+			}
+		}
 	}
 	else
 	{

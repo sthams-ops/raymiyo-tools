@@ -4,10 +4,10 @@ import { Camera, ChevronRight, MapPin, Play, Search, Square } from "lucide-react
 import { api } from "./api.js";
 import { getPosition, shrinkPhoto } from "./geo.js";
 import MapView from "./MapView.jsx";
-import { Board, VisitRow, VisitFacts, firstName } from "./ui.jsx";
+import { Board, VisitRow, VisitFacts, FocusRow, firstName } from "./ui.jsx";
 import { buildMapData, indexBy } from "./mapdata.js";
 import { isAndroidApp, startTracking, stopTracking } from "./tracking.js";
-import { OUTCOMES, distanceMeters, visitPoints } from "../shared/rules.js";
+import { OUTCOMES, distanceMeters, visitPoints, focusList, findDuplicate, phoneKey } from "../shared/rules.js";
 
 const fmtDist = (m) => (m < 1000 ? m + " m" : (m / 1000).toFixed(1) + " km");
 
@@ -23,6 +23,8 @@ export default function Rep({ data, reload, say }) {
   const [sel, setSel] = useState(null);
   const [query, setQuery] = useState("");
   const [period, setPeriod] = useState("today");
+  const [view, setView] = useState("focus");
+  const [shopQ, setShopQ] = useState("");
 
   // Android app only: share location all the time between Start day and End day.
   useEffect(() => {
@@ -38,6 +40,11 @@ export default function Rep({ data, reload, say }) {
   const mapData = useMemo(
     () => buildMapData({ visits: todays, shops: data.shops.filter((s) => s.owner === me.email), users: data.users, days: data.days, tracks: data.tracks }),
     [todays, data.shops, data.users, data.days, data.tracks, me.email]
+  );
+  const focus = useMemo(() => focusList(data.shops, data.today, { owner: me.email, reorderDays: data.settings.reorderDays }), [data.shops, data.today, me.email, data.settings.reorderDays]);
+  const twin = useMemo(
+    () => (step === "pick" && pos && ((draft.newName || "").trim().length >= 3 || phoneKey(draft.newPhone)) ? findDuplicate(data.shops, { name: draft.newName, phone: draft.newPhone, lat: pos.lat, lng: pos.lng }) : null),
+    [step, pos, draft.newName, draft.newPhone, data.shops]
   );
   const areas = useMemo(() => [...new Set(data.shops.map((s) => s.area).filter(Boolean))].sort(), [data.shops]);
   const set = (patch) => {
@@ -88,8 +95,23 @@ export default function Rep({ data, reload, say }) {
       .slice(0, q ? 12 : 6);
   }, [pos, query, data.shops]);
 
+  async function markDone(shop) {
+    setBusy("done");
+    try {
+      await api.shopDone(shop.id);
+      await reload();
+      say("Ticked off. Well done.");
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy("");
+    }
+  }
+
   function addShop() {
     if (!(draft.newName || "").trim()) return setErr("Type the shop name first.");
+    if (!phoneKey(draft.newPhone)) return setErr("Add the shop's phone number. Ask the owner if it is not on the signboard.");
+    if (twin) return setErr(twin.shop.active === false ? `${twin.shop.name} is already saved but archived. Ask the admin to restore it.` : `${twin.shop.name} is already saved. Tap "Use this shop".`);
     set({ isNew: true, shopId: null });
     setStep("log");
   }
@@ -98,6 +120,7 @@ export default function Rep({ data, reload, say }) {
     if (!draft.outcome) return setErr("Pick what happened at the shop.");
     const value = Number(String(draft.value || "").replace(/[^0-9]/g, ""));
     if (draft.outcome === "order" && !(value > 0)) return setErr("Enter the order amount in rupees.");
+    if (!draft.isNew && shops[draft.shopId] && !phoneKey(shops[draft.shopId].phone) && !phoneKey(draft.phone)) return setErr("Add the shop's phone number.");
     setErr("");
     setBusy("saving");
     try {
@@ -112,7 +135,7 @@ export default function Rep({ data, reload, say }) {
       }
       const shopPart = draft.isNew
         ? { shopName: draft.newName, shopType: draft.newType || "Retailer", area: draft.newArea || "", phone: draft.newPhone || "" }
-        : { shopId: draft.shopId };
+        : { shopId: draft.shopId, phone: draft.phone || "" };
       const out = await api.createVisit({
         ...shopPart,
         outcome: draft.outcome,
@@ -192,10 +215,21 @@ export default function Rep({ data, reload, say }) {
                 <input value={draft.newArea || ""} onChange={(e) => set({ newArea: e.target.value })} placeholder="e.g. Kalimati" list="areas" autoComplete="off" />
               </label>
               <label className="field">
-                Phone (optional)
-                <input value={draft.newPhone || ""} onChange={(e) => set({ newPhone: e.target.value })} inputMode="tel" placeholder="98XXXXXXXX" autoComplete="off" />
+                Phone
+                <input value={draft.newPhone || ""} onChange={(e) => set({ newPhone: e.target.value })} inputMode="tel" placeholder="98XXXXXXXX" autoComplete="off" required />
               </label>
             </div>
+            {twin && (
+              <div className="warnbox">
+                <span>
+                  This looks like a shop that is already saved: <b>{twin.shop.name}</b>
+                  {twin.shop.area ? ", " + twin.shop.area : ""} ({twin.why === "phone" ? "same phone number" : "same name, close to here"}).
+                </span>
+                {twin.shop.active !== false && (
+                  <button className="btn solid" onClick={() => { set({ shopId: twin.shop.id, isNew: false }); setStep("log"); }}>Use this shop</button>
+                )}
+              </div>
+            )}
             <datalist id="areas">{areas.map((a) => <option key={a} value={a} />)}</datalist>
             {err && <p className="error">{err}</p>}
             <button className="btn" onClick={addShop}>Add shop and continue</button>
@@ -221,6 +255,13 @@ export default function Rep({ data, reload, say }) {
               </p>
               <h2>{shop.name}</h2>
             </div>
+            {!draft.isNew && !phoneKey(shop.phone) && (
+              <label className="field">
+                Shop phone number
+                <input value={draft.phone || ""} onChange={(e) => set({ phone: e.target.value })} inputMode="tel" placeholder="98XXXXXXXX" autoComplete="off" />
+                <small>This shop has no number saved yet. Ask the owner.</small>
+              </label>
+            )}
             <div>
               <h3>What happened?</h3>
               <div className="chips" role="group" aria-label="Outcome">
@@ -289,6 +330,23 @@ export default function Rep({ data, reload, say }) {
   }
 
   const chosen = sel && data.visits.find((v) => v.id === sel);
+  const target = data.settings.dailyVisits;
+  const urgent = focus.filter((f) => f.level === "overdue" || f.level === "today");
+  const pushes = focus.filter((f) => f.level === "push");
+  const soon = focus.filter((f) => f.level === "soon");
+  const overdueCount = focus.filter((f) => f.level === "overdue").length;
+  // One short line that tells the person where they stand.
+  const week = data.board.week;
+  const myRank = week.findIndex((r) => r.email === me.email);
+  let nudge = "";
+  if (overdueCount) nudge = `${overdueCount} overdue ${overdueCount === 1 ? "task" : "tasks"}. Clear ${overdueCount === 1 ? "it" : "them"} first.`;
+  else if (myRank > 0) nudge = `${week[myRank - 1].points - week[myRank].points + 1} more points this week and you pass ${firstName(week[myRank - 1])}.`;
+  else if (myRank === 0 && week.length > 1 && week[0].points > 0) nudge = `You lead this week by ${week[0].points - week[1].points} points. ${firstName(week[1])} is chasing.`;
+  const stageRank = { "Repeat Buyer": 0, "First Order": 1, Interested: 2, Prospect: 3 };
+  const myShops = data.shops
+    .filter((s) => s.active !== false && s.owner === me.email)
+    .filter((s) => !shopQ.trim() || (s.name + " " + (s.area || "")).toLowerCase().includes(shopQ.trim().toLowerCase()))
+    .sort((a, b) => (stageRank[a.stage] ?? 3) - (stageRank[b.stage] ?? 3) || (a.lastVisit || "").localeCompare(b.lastVisit || ""));
   return (
     <main className="shell">
       {map}
@@ -304,6 +362,11 @@ export default function Rep({ data, reload, say }) {
             <div className="stat"><b>{mine.orders}</b><span>Orders</span></div>
             <div className="stat hot"><b>{mine.points}</b><span>Points</span></div>
           </div>
+          <div className="meter">
+            <span>{mine.visits >= target ? `Target done: ${mine.visits} of ${target} visits. Keep going.` : `${mine.visits} of ${target} visits today, ${target - mine.visits} to go`}</span>
+            <div className="bar"><i style={{ width: Math.min(100, Math.round((mine.visits / target) * 100)) + "%", background: mine.visits >= target ? "var(--ok)" : "var(--brand)" }} /></div>
+          </div>
+          {nudge && <p className="nudge">{nudge}</p>}
           {err && <p className="error">{err}</p>}
           {started ? (
             <button className="cta" onClick={beginCheckin} disabled={!!busy}>
@@ -325,6 +388,63 @@ export default function Rep({ data, reload, say }) {
             <VisitFacts v={chosen} shop={shops[chosen.shopId]} user={users[chosen.rep]} points={data.settings.points} />
           </div>
         )}
+
+        <div className="card">
+          <div className="head">
+            <h2>{view === "focus" ? "Your focus list" : `My shops (${myShops.length})`}</h2>
+            <div className="seg" role="group" aria-label="List">
+              <button aria-pressed={view === "focus"} onClick={() => setView("focus")}>Focus</button>
+              <button aria-pressed={view === "shops"} onClick={() => setView("shops")}>My shops</button>
+            </div>
+          </div>
+          {view === "focus" && (
+            <>
+              {!focus.length && <p className="muted">Nothing waiting. Every new check-in adds its next step here, so you always know where to go.</p>}
+              {urgent.length > 0 && (
+                <div className="focusList">
+                  <h3>Do these first ({urgent.length})</h3>
+                  {urgent.map((f) => <FocusRow key={f.shop.id} item={f} onDone={markDone} busy={busy === "done"} />)}
+                </div>
+              )}
+              {pushes.length > 0 && (
+                <div className="focusList">
+                  <h3>Push these shops ({pushes.length})</h3>
+                  {pushes.slice(0, 8).map((f) => <FocusRow key={f.shop.id} item={f} />)}
+                </div>
+              )}
+              {soon.length > 0 && (
+                <div className="focusList">
+                  <h3>Coming up ({soon.length})</h3>
+                  {soon.slice(0, 6).map((f) => <FocusRow key={f.shop.id} item={f} onDone={markDone} busy={busy === "done"} />)}
+                </div>
+              )}
+            </>
+          )}
+          {view === "shops" && (
+            <>
+              <label className="search">
+                <Search size={18} />
+                <input value={shopQ} onChange={(e) => setShopQ(e.target.value)} placeholder="Search my shops" aria-label="Search my shops" />
+              </label>
+              <div className="rows">
+                {myShops.map((s) => (
+                  <div key={s.id} className="row plain acts">
+                    <span className="what">
+                      <b>{s.name}</b>
+                      <small>
+                        {s.area || "Area not set"} · {s.orders} orders{s.lastVisit ? " · last visit " + s.lastVisit : ""}
+                        {s.next ? ` · ${s.next.step} by ${s.next.due}` : ""}
+                      </small>
+                    </span>
+                    {s.phone && <a className="btn small" href={"tel:" + s.phone}>Call</a>}
+                    <span className="pill stage">{s.stage || "Prospect"}</span>
+                  </div>
+                ))}
+                {!myShops.length && <p className="muted">{shopQ ? "No shop matches." : "No shops yet. Shops you add at check-in become yours."}</p>}
+              </div>
+            </>
+          )}
+        </div>
 
         <div className="card">
           <h3>Today</h3>

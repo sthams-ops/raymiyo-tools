@@ -1,5 +1,70 @@
 // Small pieces used on every screen.
+import { useEffect, useState } from "react";
+import { Check, Navigation, Phone, X } from "lucide-react";
 import { OUTCOMES, money, visitPoints } from "../shared/rules.js";
+
+// A photo that opens full screen inside the app, with a clear way back.
+export function Photo({ src, alt }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const esc = (e) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [open]);
+  return (
+    <>
+      <button type="button" className="shotBtn" onClick={() => setOpen(true)} aria-label="Open photo">
+        <img className="shot" src={src} alt={alt} />
+      </button>
+      {open && (
+        <div className="lightbox" role="dialog" aria-modal="true" aria-label="Photo" onClick={() => setOpen(false)}>
+          <img src={src} alt={alt} />
+          <button type="button" className="lightClose" onClick={() => setOpen(false)}>
+            <X size={20} /> Close
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+const LEVEL_LABEL = { overdue: "Overdue", today: "Today", push: "Push", soon: "Coming up" };
+
+// One line of the to-do list: what to do at which shop, with call and directions.
+export function FocusRow({ item, owner, onDone, busy }) {
+  const s = item.shop;
+  return (
+    <div className={"focus lv-" + item.level}>
+      <div className="focusTop">
+        <span className={"tag lv-" + item.level}>{LEVEL_LABEL[item.level]}</span>
+        <small>{item.why}</small>
+      </div>
+      <b>{s.name}</b>
+      <p>
+        {item.title}
+        {s.area ? " · " + s.area : ""}
+        {owner ? " · " + firstName(owner) : ""}
+      </p>
+      {s.lastNote && <p className="quote">“{s.lastNote}”</p>}
+      <div className="focusActs">
+        {s.phone && (
+          <a className="btn small" href={"tel:" + s.phone}>
+            <Phone size={15} /> Call
+          </a>
+        )}
+        <a className="btn small" href={`https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}`} target="_blank" rel="noreferrer">
+          <Navigation size={15} /> Directions
+        </a>
+        {onDone && s.next && (
+          <button className="btn small" disabled={busy} onClick={() => onDone(s)}>
+            <Check size={15} /> {item.kind === "deliver" ? "Delivered" : "Done"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function Pill({ outcome }) {
   return <span className={`pill o-${outcome}`}>{OUTCOMES[outcome] || outcome}</span>;
@@ -123,9 +188,7 @@ export function VisitFacts({ v, shop, user, points }) {
         <>
           <dt>Photo</dt>
           <dd>
-            <a href={v.photo} target="_blank" rel="noreferrer">
-              <img className="shot" src={v.photo} alt={`Shelf at ${(shop && shop.name) || v.shopName}`} />
-            </a>
+            <Photo src={v.photo} alt={`Shelf at ${(shop && shop.name) || v.shopName}`} />
           </dd>
         </>
       )}

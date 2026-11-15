@@ -7,7 +7,7 @@ import { guard, loadUsers, readBody, clean, fail, rid } from "../lib/auth.js";
 import { loadSettings, stageFor } from "../lib/data.js";
 import { nepal, addDays, isDate } from "../lib/time.js";
 import { syncVisit, cancelVisit } from "../lib/crm.js";
-import { OUTCOMES, NEXT_STEPS, distanceMeters, visitPoints } from "../shared/rules.js";
+import { OUTCOMES, NEXT_STEPS, distanceMeters, visitPoints, phoneKey, findDuplicate } from "../shared/rules.js";
 
 const TERMS = ["Cash", "Credit (Cheque)"];
 const bad = (res, msg) => res.status(400).json({ error: msg });
@@ -31,8 +31,15 @@ function followUp(outcome, date, picked) {
   return { nextStep: rule.step, followUp: ok ? picked : addDays(date, rule.days) };
 }
 
-async function pushToCrm(key, visit, shop, user, settings) {
-  const sync = await syncVisit(visit, shop, user, visitPoints(visit, settings.points));
+// What the shop is waiting for, shown in the field user's focus list.
+function setNext(shop, visit) {
+  shop.next = visit.nextStep && visit.nextStep !== "No action" && visit.followUp ? { step: visit.nextStep, due: visit.followUp, visitId: visit.id } : null;
+  shop.lastOutcome = visit.outcome;
+  shop.lastNote = (visit.note || "").slice(0, 140);
+}
+
+async function pushToCrm(key, visit, shop, user, settings, doneCrmId = "") {
+  const sync = await syncVisit(visit, shop, user, visitPoints(visit, settings.points), doneCrmId);
   if (sync.status === "off") return;
   visit.crm = sync.status;
   visit.crmError = sync.detail ? clean(sync.detail, 200) : "";
@@ -72,18 +79,32 @@ async function create(req, res) {
   const { date, time, month } = nepal();
   let shop;
   let newShop = false;
+  const phone = phoneKey(b.phone);
   if (b.shopId) {
     shop = await store.hget("field:shops", String(b.shopId));
     if (!shop || shop.active === false) return res.status(404).json({ error: "That shop was not found. Refresh and try again." });
+    if (!phoneKey(shop.phone)) {
+      if (!phone) return bad(res, "Add the shop's phone number.");
+      const twin = findDuplicate(Object.values(await store.hall("field:shops")), { phone, ignoreId: shop.id });
+      if (twin) return res.status(409).json({ error: `That phone number is already saved for ${twin.shop.name}.` });
+      shop.phone = phone;
+    }
   } else {
     const name = clean(b.shopName, 80);
     if (!name) return bad(res, "Type the shop name.");
+    if (!phone) return bad(res, "Add the shop's phone number. It needs at least 7 digits.");
+    const twin = findDuplicate(Object.values(await store.hall("field:shops")), { name, phone, lat, lng });
+    if (twin) {
+      const where = twin.shop.area ? ` in ${twin.shop.area}` : "";
+      const fix = twin.shop.active === false ? "It is archived. Ask the admin to restore it." : "Pick it from the shop list instead.";
+      return res.status(409).json({ error: twin.why === "phone" ? `That phone number is already saved for ${twin.shop.name}${where}. ${fix}` : `${twin.shop.name}${where} is already saved close to here. ${fix}`, duplicate: twin.shop.id });
+    }
     shop = {
       id: "s_" + rid(6),
       name,
       type: b.shopType === "Wholesaler" ? "Wholesaler" : "Retailer",
       area: clean(b.area, 40),
-      phone: clean(b.phone, 20),
+      phone,
       lat,
       lng,
       owner: me.email,
@@ -131,6 +152,13 @@ async function create(req, res) {
   }
   shop.lastVisit = date;
   shop.stage = stageFor(shop, visit.outcome);
+  // This visit closes whatever the shop was waiting for.
+  let doneCrmId = "";
+  if (shop.next && shop.next.visitId) {
+    const before = await find(shop.next.visitId);
+    doneCrmId = (before.visit && before.visit.crmId) || "";
+  }
+  setNext(shop, visit);
 
   await store.hset("field:shops", shop.id, shop);
   await store.hset("field:visits:" + month, visit.id, visit);
@@ -138,7 +166,7 @@ async function create(req, res) {
   const day = (await store.hget("field:day:" + date, me.email)) || { start: time };
   await store.hset("field:day:" + date, me.email, { ...day, end: "", lat, lng, at: time });
 
-  await pushToCrm("field:visits:" + month, visit, shop, me, settings);
+  await pushToCrm("field:visits:" + month, visit, shop, me, settings, doneCrmId);
   res.json({ visit, shop });
 }
 
@@ -168,7 +196,6 @@ async function update(req, res) {
       shop.orders += 1;
     }
     shop.stage = stageFor(shop, b.outcome);
-    await store.hset("field:shops", shop.id, shop);
   }
   visit.outcome = b.outcome;
   visit.value = order.value;
@@ -176,6 +203,11 @@ async function update(req, res) {
   visit.note = clean(b.note, 500);
   visit.editedBy = me.email;
   Object.assign(visit, followUp(visit.outcome, visit.date, visit.followUp));
+  if (shop) {
+    // Only the shop's latest check-in decides what it is waiting for.
+    if (!shop.next || shop.next.visitId === visit.id || shop.lastVisit === visit.date) setNext(shop, visit);
+    await store.hset("field:shops", shop.id, shop);
+  }
   await store.hset(key, visit.id, visit);
   // Keep Zoho CRM in step with the correction.
   const users = await loadUsers();
@@ -190,9 +222,12 @@ async function remove(req, res) {
   const { key, visit } = await find(id);
   if (!visit) return res.status(404).json({ error: "That check-in was not found." });
   const shop = await store.hget("field:shops", visit.shopId);
-  if (shop && visit.outcome === "order") {
-    shop.orders = Math.max(0, shop.orders - 1);
-    shop.stage = stageFor(shop, "");
+  if (shop) {
+    if (visit.outcome === "order") {
+      shop.orders = Math.max(0, shop.orders - 1);
+      shop.stage = stageFor(shop, "");
+    }
+    if (shop.next && shop.next.visitId === visit.id) shop.next = null;
     await store.hset("field:shops", shop.id, shop);
   }
   await store.hdel(key, visit.id);

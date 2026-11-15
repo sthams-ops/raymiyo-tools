@@ -43,12 +43,13 @@ async function send(body) {
 }
 
 // Creates the Shop Visit in CRM, or updates it when the same check-in is sent again.
-export function syncVisit(visit, shop, user, points = 0) {
+export function syncVisit(visit, shop, user, points = 0, doneCrmId = "") {
   const photo = visit.photo && visit.photo.startsWith("/") ? appUrl() + visit.photo : visit.photo || "";
   return send({
     action: "save",
     visit_id: visit.id,
     crm_visit_id: visit.crmId || "",
+    done_crm_visit_id: doneCrmId || "",
     date: visit.date,
     time: visit.time,
     rep_email: user.email,
@@ -82,4 +83,10 @@ export function syncVisit(visit, shop, user, points = 0) {
 // Marks the Shop Visit as cancelled in CRM when an admin deletes the check-in.
 export function cancelVisit(visit, shop) {
   return send({ action: "cancel", visit_id: visit.id, crm_visit_id: visit.crmId || "", crm_account_id: (shop && shop.crmId) || "", shop_stage: (shop && shop.stage) || "" });
+}
+
+// Ticks "Follow up Done" on a Shop Visit when the task is marked done in the app.
+export function doneVisit(visit) {
+  if (!visit || !visit.crmId) return Promise.resolve({ status: "off" });
+  return send({ action: "done", visit_id: visit.id, crm_visit_id: visit.crmId });
 }

@@ -1,16 +1,17 @@
 // The admin screen. The "view only" admin sees the same screens with every
 // change control removed; the server also refuses changes from that account.
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileText, MapPinned, Search, Settings as Cog, Store, Trash2, Users } from "lucide-react";
+import { Download, FileText, Gauge, MapPinned, Search, Settings as Cog, Store, Trash2, Users } from "lucide-react";
 import { api } from "./api.js";
 import MapView from "./MapView.jsx";
-import { Avatar, Board, VisitRow, VisitFacts } from "./ui.jsx";
+import { Avatar, Board, VisitRow, VisitFacts, FocusRow } from "./ui.jsx";
 import { buildMapData, indexBy, weekStartOf } from "./mapdata.js";
 import { toRows, downloadCsv, downloadPdf } from "./export.js";
-import { COLORS, OUTCOMES, ROLES, money, scoreboard } from "../shared/rules.js";
+import { COLORS, OUTCOMES, ROLES, money, scoreboard, focusList, coach } from "../shared/rules.js";
 
 const TABS = [
   ["live", "Map", MapPinned],
+  ["insights", "Insights", Gauge],
   ["shops", "Shops", Store],
   ["team", "Team", Users],
   ["settings", "Settings", Cog],
@@ -43,6 +44,7 @@ export default function Admin({ data, reload, setRange, say }) {
       </nav>
       {!canEdit && <p className="banner">View only. You can see everything; changes are switched off for this account.</p>}
       {tab === "live" && <Live {...ctx} />}
+      {tab === "insights" && <Insights {...ctx} />}
       {tab === "shops" && <Shops {...ctx} />}
       {tab === "team" && <Team {...ctx} />}
       {tab === "settings" && <SettingsTab {...ctx} />}
@@ -252,6 +254,108 @@ function VisitCard({ v, shop, user, data, canEdit, reload, say, close }) {
         </div>
       )}
     </div>
+  );
+}
+
+/* ---------- Insights tab: who is doing well, who and what needs a push ---------- */
+const STATUS = { push: "Needs a push", watch: "Keep an eye", lead: "Leading", ok: "On track" };
+
+function Insights({ data, users, canEdit, reload, say }) {
+  const [period, setPeriod] = useState("week");
+  const [busy, setBusy] = useState(false);
+  const t = data.today;
+  const from = period === "week" ? weekStartOf(t) : t.slice(0, 7) + "-01";
+  const focus = useMemo(() => focusList(data.shops, t, { reorderDays: data.settings.reorderDays }), [data.shops, t, data.settings.reorderDays]);
+  const nowTime = new Date(Date.now() + 345 * 60000).toISOString().slice(11, 16);
+  const people = useMemo(
+    () => coach(data.board[period], focus, { from, today: t, dailyVisits: data.settings.dailyVisits, todayRows: data.board.today, nowTime }),
+    [data.board, period, focus, from, t, data.settings.dailyVisits, nowTime]
+  );
+  const total = people.reduce((a, r) => ({ visits: a.visits + r.visits, orders: a.orders + r.orders, value: a.value + r.value, newShops: a.newShops + r.newShops }), { visits: 0, orders: 0, value: 0, newShops: 0 });
+  const overdue = focus.filter((f) => f.level === "overdue");
+  const dueToday = focus.filter((f) => f.level === "today");
+  const pushes = focus.filter((f) => f.level === "push");
+  const order = { push: 0, watch: 1, ok: 2, lead: 3 };
+  const sorted = people.slice().sort((a, b) => order[a.status] - order[b.status] || b.flags.length - a.flags.length);
+  const pct = (n) => Math.round(n * 100) + "%";
+  async function done(shop) {
+    setBusy(true);
+    try {
+      await api.shopDone(shop.id);
+      await reload();
+      say("Ticked off.");
+    } catch (e) {
+      say(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="shell single">
+      <section className="panel">
+        <div className="card">
+          <div className="head">
+            <h2>How the team is doing</h2>
+            <div className="seg" role="group" aria-label="Period">
+              <button aria-pressed={period === "week"} onClick={() => setPeriod("week")}>This week</button>
+              <button aria-pressed={period === "month"} onClick={() => setPeriod("month")}>This month</button>
+            </div>
+          </div>
+          <div className="stats four">
+            <div className="stat"><b>{total.visits}</b><span>Visits</span></div>
+            <div className="stat"><b>{total.orders}</b><span>Orders ({total.visits ? pct(total.orders / total.visits) : "0%"} of visits)</span></div>
+            <div className="stat hot"><b>{money(total.value)}</b><span>Order value</span></div>
+            <div className="stat"><b>{total.newShops}</b><span>New shops</span></div>
+          </div>
+          <div className="stats">
+            <div className="stat"><b style={{ color: overdue.length ? "var(--bad)" : undefined }}>{overdue.length}</b><span>Overdue tasks</span></div>
+            <div className="stat"><b>{dueToday.length}</b><span>Due today</span></div>
+            <div className="stat"><b>{pushes.length}</b><span>Shops to push</span></div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div>
+            <h2>People</h2>
+            <p className="muted small">Sorted with whoever needs your attention first. Target is {data.settings.dailyVisits} visits a day; Saturday is not counted.</p>
+          </div>
+          {sorted.map((r) => (
+            <div key={r.email} className="coach">
+              <div className="head">
+                <b><Avatar user={r} size={28} /> {r.name}</b>
+                <span className={"tag s-" + r.status}>{STATUS[r.status]}</span>
+              </div>
+              <div className="mini">
+                <div><b>{r.today}</b><span>Visits today</span></div>
+                <div><b>{r.visits}</b><span>Visits</span></div>
+                <div><b>{r.perDay.toFixed(1)}</b><span>Per field day</span></div>
+                <div><b>{r.orders}</b><span>Orders ({pct(r.rate)})</span></div>
+                <div><b>{money(r.value)}</b><span>Order value</span></div>
+                <div><b>{r.newShops}</b><span>New shops</span></div>
+                <div><b style={{ color: r.overdue ? "var(--bad)" : undefined }}>{r.overdue}</b><span>Overdue tasks</span></div>
+                <div><b>{r.far}</b><span>Far check-ins</span></div>
+                <div><b>{r.points}</b><span>Points</span></div>
+              </div>
+              {r.flags.length > 0 ? <ul>{r.flags.map((f) => <li key={f}>{f}</li>)}</ul> : <p className="muted small">{r.visits ? "Nothing to chase. Tell them it is going well." : "No check-ins in this period yet."}</p>}
+            </div>
+          ))}
+          {!people.length && <p className="muted">No field users on the team yet. Add them in the Team tab.</p>}
+        </div>
+
+        <div className="card">
+          <div>
+            <h2>Shops that need action</h2>
+            <p className="muted small">Late deliveries and follow-ups first, then shops that have gone quiet.</p>
+          </div>
+          <div className="focusList">
+            {[...overdue, ...dueToday, ...pushes].slice(0, 25).map((f) => (
+              <FocusRow key={f.shop.id} item={f} owner={users[f.shop.owner]} onDone={canEdit ? done : null} busy={busy} />
+            ))}
+            {!overdue.length && !dueToday.length && !pushes.length && <p className="muted">Nothing is waiting. Next steps appear here after each check-in.</p>}
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -522,12 +626,16 @@ function SettingsTab({ data, canEdit, reload, say }) {
   const [points, setPoints] = useState(data.settings.points);
   const [far, setFar] = useState(data.settings.farMeters);
   const [brands, setBrands] = useState(data.settings.brands.join(", "));
+  const [daily, setDaily] = useState(data.settings.dailyVisits);
+  const [reorder, setReorder] = useState(data.settings.reorderDays);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   useEffect(() => {
     setPoints(data.settings.points);
     setFar(data.settings.farMeters);
     setBrands(data.settings.brands.join(", "));
+    setDaily(data.settings.dailyVisits);
+    setReorder(data.settings.reorderDays);
   }, [data.settings]);
 
   async function save(e) {
@@ -535,7 +643,7 @@ function SettingsTab({ data, canEdit, reload, say }) {
     setBusy(true);
     setErr("");
     try {
-      await api.admin("saveSettings", { settings: { points, farMeters: far, brands: brands.split(",").map((b) => b.trim()).filter(Boolean) } });
+      await api.admin("saveSettings", { settings: { points, farMeters: far, dailyVisits: daily, reorderDays: reorder, brands: brands.split(",").map((b) => b.trim()).filter(Boolean) } });
       await reload();
       say("Settings saved. Leaderboards now use the new rules.");
     } catch (e2) {
@@ -572,6 +680,19 @@ function SettingsTab({ data, canEdit, reload, say }) {
             {rule("firstOrder", "First order from a shop", "Extra, the first time a shop buys.")}
             {rule("repeatOrder", "Repeat order", "Extra, every later order.")}
           </div>
+          <h2>Targets</h2>
+          <div className="two">
+            <label className="field">
+              Visits each person should make in a day
+              <input type="number" min="1" max="100" value={daily} disabled={!canEdit} onChange={(e) => setDaily(e.target.value)} />
+              <small>Shown as the daily target on the field screen.</small>
+            </label>
+            <label className="field">
+              Ask a buying shop for a reorder after this many days
+              <input type="number" min="3" max="120" value={reorder} disabled={!canEdit} onChange={(e) => setReorder(e.target.value)} />
+              <small>Puts the shop on the focus list.</small>
+            </label>
+          </div>
           <h2>Check-in rules</h2>
           <label className="field">
             Mark a check-in as far when it is more than this many metres from the shop
@@ -595,7 +716,7 @@ function SettingsTab({ data, canEdit, reload, say }) {
               </div>
             ))}
           </div>
-          <p className="muted small">Connections are switched on in Vercel. The README file in the field folder lists the steps.</p>
+          <p className="muted small">Connections are switched on in Railway. The README file in the field folder lists the steps.</p>
         </div>
       </section>
     </main>

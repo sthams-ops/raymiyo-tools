@@ -50,13 +50,42 @@ let r = await call("visits", { as: "divash", method: "POST", body: { shopName: "
 ok(r.code === 400, "check-in without GPS is refused");
 r = await call("visits", { as: "divash", method: "POST", body: { shopName: "Test Kirana", shopType: "Retailer", area: "Kalimati", outcome: "order", value: 0, ...KALIMATI } });
 ok(r.code === 400, "order needs an amount");
-r = await call("visits", { as: "divash", method: "POST", body: { shopName: "Test Kirana", shopType: "Retailer", area: "Kalimati", outcome: "order", value: 8400, terms: "Cash", brands: ["Chicool", "Made up"], note: "  two   cartons ", ...KALIMATI } });
+r = await call("visits", { as: "divash", method: "POST", body: { shopName: "Test Kirana", shopType: "Retailer", area: "Kalimati", outcome: "order", value: 8400, terms: "Cash", brands: ["Chicool", "Made up"], note: "  two   cartons ", phone: "+977 9811111111", ...KALIMATI } });
+const noPhone = await call("visits", { as: "divash", method: "POST", body: { shopName: "No Phone Shop", outcome: "no", ...KALIMATI } });
 ok(r.code === 200 && r.data.visit.newShop && r.data.visit.first, "new shop with a first order saves");
 ok(r.data.visit.brands.join() === "Chicool" && r.data.visit.note === "two cartons", "brands and note are cleaned");
 ok(r.data.shop.stage === "First Order" && r.data.shop.orders === 1 && r.data.shop.owner === EMAIL.divash, "shop stage and owner set");
+ok(noPhone.code === 400, "new shop without a phone number is refused");
+ok(r.data.shop.phone === "9811111111", "phone is saved as digits without the country code");
+ok(r.data.shop.next && r.data.shop.next.step === "Deliver order", "an order leaves a delivery to do");
 const shopId = r.data.shop.id;
+{
+  // duplicates
+  let d = await call("visits", { as: "sajina", method: "POST", body: { shopName: "Another Name", phone: "9811111111", outcome: "no", lat: 27.75, lng: 85.35 } });
+  ok(d.code === 409 && d.data.duplicate === shopId, "same phone number is caught as a duplicate");
+  d = await call("visits", { as: "sajina", method: "POST", body: { shopName: "test  KIRANA store", phone: "9822222222", outcome: "no", ...KALIMATI } });
+  ok(d.code === 409, "same name close by is caught as a duplicate");
+  const rules = await import("../shared/rules.js");
+  const list = rules.focusList([r.data.shop], rules.daysBetween("2026-01-01", "2026-01-01") === 0 ? r.data.shop.next.due : "", { owner: EMAIL.divash });
+  ok(list.length === 1 && list[0].kind === "deliver" && list[0].level === "today", "delivery shows on the focus list on its day");
+  const late = rules.focusList([{ ...r.data.shop, next: { step: "Follow up", due: "2026-11-10", visitId: "x" } }], "2026-11-13");
+  ok(late[0].level === "overdue" && late[0].late === 3, "late follow-up is overdue");
+  const quiet = rules.focusList([{ ...r.data.shop, next: null, lastVisit: "2026-10-01" }], "2026-11-13");
+  ok(quiet[0].kind === "reorder" && quiet[0].level === "push", "buying shop gone quiet asks for a reorder");
+  ok(rules.workingDays("2026-11-15", "2026-11-21") === 6, "Saturday is not a working day");
+  const c = rules.coach([{ email: "a", name: "A", visits: 4, orders: 0, value: 0, newShops: 0, points: 4, far: 3, days: 1 }], [], { from: "2026-11-15", today: "2026-11-18", dailyVisits: 12, todayRows: [], nowTime: "14:00" });
+  ok(c[0].status === "push" && c[0].flags.length >= 3, "coach flags a low performer");
+  const fresh = rules.coach([{ email: "a", name: "A", visits: 4, orders: 1, value: 1, newShops: 0, points: 4, far: 0, days: 1 }], [], { from: "2026-11-15", today: "2026-11-15", dailyVisits: 12, todayRows: [{ email: "a", visits: 4 }], nowTime: "12:00" });
+  ok(fresh[0].flags.length === 0, "a day still in progress is not judged on pace");
+}
 const visit1 = r.data.visit.id;
 
+{
+  const no = await call("shops", { as: "sajina", method: "POST", body: { id: shopId, action: "done" } });
+  ok(no.code === 403, "only the shop's owner can tick its task off");
+  const yes = await call("shops", { as: "divash", method: "POST", body: { id: shopId, action: "done" } });
+  ok(yes.code === 200 && yes.data.shop.next === null, "owner ticks the delivery off");
+}
 r = await call("visits", { as: "sajina", method: "POST", body: { shopId, outcome: "order", value: 5000, terms: "Credit (Cheque)", lat: 27.7218, lng: 85.3202 } });
 ok(r.code === 200 && !r.data.visit.first && !r.data.visit.newShop, "second order is a repeat order");
 ok(r.data.visit.far && r.data.visit.distance > 2000, "check-in far from the shop is flagged");
@@ -119,7 +148,7 @@ ok((await call("state", { as: "divash" })).code === 401, "switched-off person is
 {
   const { addDays } = await import("../lib/time.js");
   const today = nepal().date;
-  const mk = (extra) => call("visits", { as: "sajina", method: "POST", body: { shopName: "Follow Test " + Math.random(), lat: 27.7, lng: 85.3, ...extra } });
+  const mk = (extra) => call("visits", { as: "sajina", method: "POST", body: { shopName: "Follow Test " + Math.random(), phone: "98" + String(Math.floor(Math.random() * 1e8)).padStart(8, "0"), lat: 27.7, lng: 85.3, ...extra } });
   let f = await mk({ outcome: "interested" });
   ok(f.data.visit.nextStep === "Follow up" && f.data.visit.followUp === addDays(today, 3), "interested shop gets a follow-up in 3 days");
   f = await mk({ outcome: "absent", followUp: addDays(today, 5) });
