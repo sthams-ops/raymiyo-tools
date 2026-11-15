@@ -13,14 +13,14 @@ delete process.env.FIELD_HTTPS;
 const { store } = await import("../lib/store.js");
 const { monthsBetween, weekStart, nepal } = await import("../lib/time.js");
 const api = {};
-for (const name of ["state", "visits", "shops", "day", "admin", "tv", "photo"]) api[name] = (await import(`../api/${name}.js`)).default;
+for (const name of ["state", "visits", "shops", "day", "admin", "tv", "photo", "track"]) api[name] = (await import(`../api/${name}.js`)).default;
 
 const SID = { mijesh: "a".repeat(64), bivek: "b".repeat(64), divash: "c".repeat(64), sajina: "d".repeat(64) };
 const EMAIL = { mijesh: "mijesh.shrestha@unijoynepal.com", bivek: "bivek.maharjan@unijoynepal.com", divash: "divash.shilpakar@unijoynepal.com", sajina: "sajina@unijoynepal.com" };
 for (const k of Object.keys(SID)) await store.set("field:session:" + SID[k], { email: EMAIL[k] });
 
-async function call(name, { as, method = "GET", query = {}, body } = {}) {
-  const req = { method, query, body, headers: { cookie: as ? `field_session=${SID[as]}` : "" } };
+async function call(name, { as, method = "GET", query = {}, body, bearer } = {}) {
+  const req = { method, query, body, headers: { cookie: as ? `field_session=${SID[as]}` : "", ...(bearer ? { authorization: "Bearer " + bearer } : {}) } };
   const out = { code: 200, data: null };
   const res = {
     status: (c) => ((out.code = c), res),
@@ -114,6 +114,32 @@ ok((await call("visits", { as: "mijesh", method: "DELETE", query: { id: "../../e
 // switched-off people lose access at once
 await call("admin", { as: "mijesh", method: "POST", body: { op: "saveUser", user: { email: EMAIL.divash, name: "Divash Shilpakar", role: "rep", active: false } } });
 ok((await call("state", { as: "divash" })).code === 401, "switched-off person is signed out");
+
+// live tracking (Android app)
+{
+  const now = Date.now();
+  const pt = (lat, lng, secAgo, accuracy = 10) => ({ lat, lng, accuracy, t: now - secAgo * 1000 });
+  ok((await call("track", { method: "POST", body: { action: "token" } })).code === 401, "tracking key needs sign-in");
+  ok((await call("track", { as: "bivek", method: "POST", body: { action: "token" } })).code === 403, "view-only partner cannot be tracked");
+  ok((await call("track", { method: "POST", bearer: "f".repeat(64), body: { points: [pt(27.7, 85.3, 5)] } })).code === 401, "unknown tracking key is refused");
+  const tok = (await call("track", { as: "sajina", method: "POST", body: { action: "token" } })).data.token;
+  ok(/^[a-f0-9]{64}$/.test(tok), "tracking key issued");
+  await store.hdel("field:day:" + nepal().date, EMAIL.sajina);
+  await store.hdel("field:track:" + nepal().date, EMAIL.sajina);
+  let t = await call("track", { method: "POST", bearer: tok, body: { points: [pt(27.7, 85.3, 5)] } });
+  ok(t.code === 200 && t.data.tracking === false && t.data.saved === 0, "nothing is tracked before Start day");
+  await call("day", { as: "sajina", method: "POST", body: { action: "start", lat: 27.7, lng: 85.3 } });
+  t = await call("track", { method: "POST", bearer: tok, body: { points: [pt(27.7, 85.3, 30), pt(27.70001, 85.3, 20), pt(27.705, 85.31, 10), pt(27.71, 85.32, 5, 900), pt(999, 0, 1)] } });
+  ok(t.data.tracking === true && t.data.saved === 2, "tracking keeps real movement and drops jitter, bad fixes and bad numbers");
+  let st = await call("state", { as: "mijesh" });
+  ok(st.data.tracks[EMAIL.sajina].length === 2 && st.data.days[EMAIL.sajina].lat === 27.705, "admin sees the route and the live dot moves");
+  ok(!("tracks" in st.data) || !st.data.tracks[EMAIL.divash], "no route for someone who is not tracked");
+  st = await call("state", { as: "sajina" });
+  ok(Object.keys(st.data.tracks).join() === EMAIL.sajina, "field user only receives their own route");
+  await call("day", { as: "sajina", method: "POST", body: { action: "end", lat: 27.7, lng: 85.3 } });
+  t = await call("track", { method: "POST", bearer: tok, body: { points: [pt(27.8, 85.4, 1)] } });
+  ok(t.data.tracking === false && (await store.hget("field:track:" + nepal().date, EMAIL.sajina)).length === 2, "tracking stops at End day");
+}
 
 // photos and TV
 ok((await call("photo", { as: "sajina", method: "POST", body: { dataUrl: "x" } })).code === 501, "photos report not connected");

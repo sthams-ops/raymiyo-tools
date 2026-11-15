@@ -10,7 +10,7 @@ export function weekStartOf(date) {
   return d.toISOString().slice(0, 10);
 }
 
-export function buildMapData({ visits, shops, users, days, showShops = true }) {
+export function buildMapData({ visits, shops, users, days, tracks, showShops = true }) {
   const people = indexBy(users, "email");
   const shopsById = indexBy(shops, "id");
   const pins = visits.map((v) => {
@@ -42,5 +42,9 @@ export function buildMapData({ visits, shops, users, days, showShops = true }) {
       initial: firstName(people[email])[0],
       label: `${firstName(people[email])} ${d.at}${d.end ? " · day ended" : ""}`,
     }));
-  return { pins, dots, live };
+  // Routes travelled (Android app live tracking), one coloured line per person.
+  const routes = Object.entries(tracks || {})
+    .filter(([email, line]) => people[email] && Array.isArray(line) && line.length > 1)
+    .map(([email, line]) => ({ key: email, color: people[email].color, coords: line.map((p) => [p[1], p[0]]) }));
+  return { pins, dots, live, routes };
 }

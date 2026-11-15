@@ -3,6 +3,7 @@
 //   pins  check-ins        [{ id, lat, lng, outcome, color, initial, title }]
 //   dots  unvisited shops  [{ id, lat, lng, title }]
 //   live  last known spots [{ key, lat, lng, color, initial, label }]
+//   routes paths travelled  [{ key, color, coords: [[lng, lat], ...] }]
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -11,11 +12,18 @@ import { LocateFixed } from "lucide-react";
 const STYLE = import.meta.env.VITE_MAP_STYLE || "https://tiles.openfreemap.org/styles/liberty";
 const KATHMANDU = [85.318, 27.705];
 
-export default function MapView({ pins = [], dots = [], live = [], selected, onSelect, className = "" }) {
+const routeData = (routes) => ({
+  type: "FeatureCollection",
+  features: routes.map((r) => ({ type: "Feature", properties: { color: r.color }, geometry: { type: "LineString", coordinates: r.coords } })),
+});
+
+export default function MapView({ pins = [], dots = [], live = [], routes = [], selected, onSelect, className = "" }) {
   const box = useRef(null);
   const map = useRef(null);
   const marks = useRef([]);
   const fitted = useRef(false);
+  const latestRoutes = useRef(routes);
+  latestRoutes.current = routes;
   const [problem, setProblem] = useState("");
 
   useEffect(() => {
@@ -24,7 +32,14 @@ export default function MapView({ pins = [], dots = [], live = [], selected, onS
     try {
       m = new maplibregl.Map({ container: box.current, style: STYLE, center: KATHMANDU, zoom: 11.6, attributionControl: { compact: true } });
       m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-      m.once("load", () => (ready = true));
+      m.once("load", () => {
+        ready = true;
+        // Routes sit under the pins: a white edge with the person's colour on top.
+        m.addSource("routes", { type: "geojson", data: routeData(latestRoutes.current) });
+        const line = { "line-cap": "round", "line-join": "round" };
+        m.addLayer({ id: "routes-edge", type: "line", source: "routes", layout: line, paint: { "line-color": "#ffffff", "line-width": 7, "line-opacity": 0.9 } });
+        m.addLayer({ id: "routes-line", type: "line", source: "routes", layout: line, paint: { "line-color": ["get", "color"], "line-width": 4, "line-opacity": 0.85 } });
+      });
       map.current = m;
     } catch {
       setProblem("The map cannot be shown on this device. Check-ins still work.");
@@ -51,6 +66,13 @@ export default function MapView({ pins = [], dots = [], live = [], selected, onS
     pts.forEach((p) => b.extend(p));
     m.fitBounds(b, { padding: 56, maxZoom: 15.5, duration: animate ? 600 : 0 });
   }
+
+  const routeSignature = JSON.stringify(routes);
+  useEffect(() => {
+    const src = map.current && map.current.getSource && map.current.getSource("routes");
+    if (src) src.setData(routeData(routes));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeSignature]);
 
   const signature = JSON.stringify([pins, dots, live, selected]);
   useEffect(() => {

@@ -1,11 +1,12 @@
 // The field user's screen: start the day, check in at shops, see today's race.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Camera, ChevronRight, MapPin, Play, Search, Square } from "lucide-react";
 import { api } from "./api.js";
 import { getPosition, shrinkPhoto } from "./geo.js";
 import MapView from "./MapView.jsx";
 import { Board, VisitRow, VisitFacts, firstName } from "./ui.jsx";
 import { buildMapData, indexBy } from "./mapdata.js";
+import { isAndroidApp, startTracking, stopTracking } from "./tracking.js";
 import { OUTCOMES, distanceMeters, visitPoints } from "../shared/rules.js";
 
 const fmtDist = (m) => (m < 1000 ? m + " m" : (m / 1000).toFixed(1) + " km");
@@ -23,13 +24,20 @@ export default function Rep({ data, reload, say }) {
   const [query, setQuery] = useState("");
   const [period, setPeriod] = useState("today");
 
+  // Android app only: share location all the time between Start day and End day.
+  useEffect(() => {
+    if (!isAndroidApp()) return;
+    if (started) startTracking((text) => setErr(text));
+    else stopTracking();
+  }, [started]);
+
   const users = useMemo(() => indexBy(data.users, "email"), [data.users]);
   const shops = useMemo(() => indexBy(data.shops, "id"), [data.shops]);
   const todays = useMemo(() => data.visits.filter((v) => v.date === data.today && v.rep === me.email), [data.visits, data.today, me.email]);
   const mine = data.board.today.find((r) => r.email === me.email) || { visits: 0, orders: 0, points: 0 };
   const mapData = useMemo(
-    () => buildMapData({ visits: todays, shops: data.shops.filter((s) => s.owner === me.email), users: data.users, days: data.days }),
-    [todays, data.shops, data.users, data.days, me.email]
+    () => buildMapData({ visits: todays, shops: data.shops.filter((s) => s.owner === me.email), users: data.users, days: data.days, tracks: data.tracks }),
+    [todays, data.shops, data.users, data.days, data.tracks, me.email]
   );
   const areas = useMemo(() => [...new Set(data.shops.map((s) => s.area).filter(Boolean))].sort(), [data.shops]);
   const set = (patch) => {
@@ -282,6 +290,7 @@ export default function Rep({ data, reload, say }) {
           <div>
             <p className="eyebrow">{started ? `Day started at ${day.start}` : day && day.end ? `Day ended at ${day.end}` : "Day not started"}</p>
             <h2>{started ? `${firstName(me)}, you are in the field` : `${firstName(me)}, ready to go?`}</h2>
+            {isAndroidApp() && <p className="muted small">{started ? "Live location is on until you tap End day." : "Your location is only shared between Start day and End day."}</p>}
           </div>
           <div className="stats">
             <div className="stat"><b>{mine.visits}</b><span>Visits</span></div>

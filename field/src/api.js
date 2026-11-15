@@ -27,5 +27,6 @@ export const api = {
   deleteVisit: (id) => call("/api/visits?id=" + encodeURIComponent(id), { method: "DELETE" }),
   saveShop: (shop) => send("PATCH", "/api/shops", shop),
   admin: (op, payload) => send("POST", "/api/admin", { op, ...payload }),
+  trackToken: () => send("POST", "/api/track", { action: "token" }),
   photo: (dataUrl) => send("POST", "/api/photo", { dataUrl }),
 };

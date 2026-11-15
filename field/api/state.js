@@ -6,6 +6,7 @@ import { guard, loadUsers, fail, OWNER, DOMAIN } from "../lib/auth.js";
 import { loadSettings, loadVisits, buildBoard, publicUser } from "../lib/data.js";
 import { nepal, isDate, weekStart } from "../lib/time.js";
 import { crmEnabled } from "../lib/crm.js";
+import { loadTracks } from "../lib/track.js";
 
 export default async function handler(req, res) {
   try {
@@ -35,6 +36,10 @@ export default async function handler(req, res) {
       myDays = days[me.email] ? { [me.email]: days[me.email] } : {};
     }
 
+    // Routes travelled: for the one day being looked at, otherwise today.
+    const trackDate = from === to ? from : today;
+    const tracks = await loadTracks(trackDate, me.role === "rep" ? me.email : null);
+
     res.setHeader("Cache-Control", "no-store");
     res.json({
       me: publicUser(me),
@@ -46,6 +51,8 @@ export default async function handler(req, res) {
       shops: Object.values(shops),
       visits,
       days: myDays,
+      tracks,
+      trackDate,
       board,
       owner: OWNER,
       domain: DOMAIN,

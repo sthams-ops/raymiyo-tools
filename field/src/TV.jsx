@@ -26,7 +26,7 @@ export default function TV() {
     };
   }, [key]);
 
-  const mapData = useMemo(() => (data ? buildMapData({ visits: data.visits, shops: data.shops, users: data.users, days: data.days, showShops: false }) : null), [data]);
+  const mapData = useMemo(() => (data ? buildMapData({ visits: data.visits, shops: data.shops, users: data.users, days: data.days, tracks: data.tracks, showShops: false }) : null), [data]);
   if (!data) return <div className="center tv"><p>{err || "Loading the board…"}</p></div>;
 
   const users = indexBy(data.users, "email");

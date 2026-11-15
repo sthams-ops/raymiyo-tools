@@ -111,8 +111,9 @@ function Live(ctx) {
   const mapData = useMemo(() => {
     const days = isToday ? Object.fromEntries(Object.entries(data.days).filter(([e]) => person === "all" || e === person)) : {};
     const shopList = data.shops.filter((s) => person === "all" || s.owner === person);
-    return buildMapData({ visits, shops: shopList, users: data.users, days });
-  }, [visits, data.shops, data.users, data.days, person, isToday]);
+    const tracks = data.from === data.to ? Object.fromEntries(Object.entries(data.tracks || {}).filter(([e]) => person === "all" || e === person)) : {};
+    return buildMapData({ visits, shops: shopList, users: data.users, days, tracks });
+  }, [visits, data.shops, data.users, data.days, data.tracks, data.from, data.to, person, isToday]);
   const orders = visits.filter((v) => v.outcome === "order");
   const chosen = sel && visits.find((v) => v.id === sel);
   const many = data.from !== data.to;

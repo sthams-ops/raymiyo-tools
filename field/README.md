@@ -86,6 +86,7 @@ field/
   src/        the screens: App (sign-in), Rep (field user), Admin, TV, MapView, export (PDF/CSV)
   src/styles.css   all colours and fonts, set once at the top
   server.mjs  the server Railway runs
+  mobile/     the Android app (see mobile/README.md): live tracking all day
   scripts/    test.mjs (rule checks) and local-server.mjs (run on a laptop)
 ```
 
