@@ -5,7 +5,7 @@ import { api } from "./api.js";
 import Rep from "./Rep.jsx";
 import Admin from "./Admin.jsx";
 import TV from "./TV.jsx";
-import { Avatar, Toast } from "./ui.jsx";
+import { Avatar, Toast, Brand } from "./ui.jsx";
 import { ROLES } from "../shared/rules.js";
 
 const SIGN_IN_ERRORS = {
@@ -101,7 +101,7 @@ function Signed() {
   return (
     <>
       <header className="top">
-        <div className="brand">Raymiyo Field<span>Kathmandu direct sales</span></div>
+        <Brand />
         <div className="me">
           {installer && (
             <button className="btn small" onClick={async () => { installer.prompt(); await installer.userChoice.catch(() => {}); setInstaller(null); }}>
@@ -134,12 +134,10 @@ function Login() {
   const code = new URLSearchParams(window.location.search).get("error");
   return (
     <div className="login">
-      <div className="loginArt" aria-hidden="true">
-        <span /><span /><span /><span />
-      </div>
       <div className="card narrow">
-        <div className="brand big">Raymiyo Field<span>Kathmandu direct sales</span></div>
-        <p>Check in at every shop, see the day on a live map and race for the top of the board.</p>
+        <img className="loginLogo" src="/brand/raymiyo-logo.png" alt="Raymiyo Trading Pvt. Ltd" width="900" height="177" />
+        <h1>Raymiyo Field</h1>
+        <p>Check in at every shop, take orders, and see the whole day on one live map.</p>
         {code && <p className="error">{SIGN_IN_ERRORS[code] || "Sign-in did not work. Try again."}</p>}
         <a className="cta" href="/api/auth?action=login">Sign in with your Zoho account</a>
         <p className="muted small">Use your @unijoynepal.com email. Only people on the team list can sign in.</p>

@@ -7,5 +7,5 @@
     <!-- The permanent notification shown while live tracking is on. -->
     <string name="capacitor_background_geolocation_notification_channel_name">Live location</string>
     <string name="capacitor_background_geolocation_notification_icon">drawable/ic_tracking</string>
-    <string name="capacitor_background_geolocation_notification_color">#FF6A3D</string>
+    <string name="capacitor_background_geolocation_notification_color">#38645B</string>
 </resources>

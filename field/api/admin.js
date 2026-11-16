@@ -7,6 +7,9 @@ import { guard, readBody, clean, fail, loadUsers, DOMAIN, OWNER } from "../lib/a
 import { normalizeSettings, ROLES, COLORS } from "../shared/rules.js";
 import { loadProducts } from "../lib/products.js";
 import { settle } from "../lib/sync.js";
+import { loadVisits } from "../lib/data.js";
+import { cancelVisit } from "../lib/crm.js";
+import { nepal } from "../lib/time.js";
 
 export default async function handler(req, res) {
   try {
@@ -14,6 +17,24 @@ export default async function handler(req, res) {
     const me = await guard(req, res, ["admin"]);
     if (!me) return;
     const b = readBody(req);
+
+    // Removes an archived shop and its check-ins for good. For test or mistaken shops only.
+    if (b.op === "deleteShop") {
+      const shop = await store.hget("field:shops", String(b.id || ""));
+      if (!shop) return res.status(404).json({ error: "That shop was not found." });
+      if (shop.active !== false) return res.status(400).json({ error: "Archive the shop first, then delete it." });
+      if (shop.dues && shop.dues.length) return res.status(400).json({ error: "This shop still has money to collect. Clear that first." });
+      const visits = [];
+      for (let y = 2026; y <= Number(nepal().date.slice(0, 4)); y++) {
+        visits.push(...(await loadVisits(`${y}-01-01`, `${y}-12-31`)).filter((v) => v.shopId === shop.id));
+      }
+      for (const v of visits) {
+        await store.hdel("field:visits:" + v.date.slice(0, 7), v.id);
+        await cancelVisit(v, shop).catch(() => {});
+      }
+      await store.hdel("field:shops", shop.id);
+      return res.json({ ok: true, visits: visits.length });
+    }
 
     if (b.op === "saveUser") {
       const u = b.user || {};

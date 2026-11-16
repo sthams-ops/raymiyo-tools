@@ -51,10 +51,18 @@ export async function downloadPdf({ rows, summary, filterLine, name }) {
   const jsPDF = pdfLib.jsPDF || (pdfLib.default && pdfLib.default.jsPDF) || pdfLib.default;
   const autoTable = typeof tableLib.default === "function" ? tableLib.default : tableLib.default.default;
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-  const orange = [255, 106, 61];
+  const orange = [56, 100, 91];
+
+  // Company logo, top right. The report still downloads if the logo cannot be read.
+  try {
+    const blob = await (await fetch("/brand/raymiyo-logo.png")).blob();
+    const logo = await new Promise((done, fail) => { const r = new FileReader(); r.onload = () => done(r.result); r.onerror = fail; r.readAsDataURL(blob); });
+    doc.addImage(logo, "PNG", doc.internal.pageSize.getWidth() - 40 - 168, 26, 168, 33);
+  } catch (e) { /* no logo */ }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
+  doc.setTextColor(21, 48, 42);
   doc.text("Raymiyo Field Sales: visit report", 40, 44);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
@@ -68,7 +76,7 @@ export async function downloadPdf({ rows, summary, filterLine, name }) {
     body: summary.map((s) => [s.name, s.visits, s.orders, money(s.value), s.newShops, s.points]),
     theme: "grid",
     styles: { fontSize: 9, cellPadding: 5 },
-    headStyles: { fillColor: [17, 27, 46] },
+    headStyles: { fillColor: [31, 66, 59] },
     tableWidth: 460,
     margin: { left: 40 },
   });

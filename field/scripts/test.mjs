@@ -242,4 +242,15 @@ ok(r.code === 200 && r.data.visits.length === 1 && !("me" in r.data), "TV feed w
   ok(back.code === 200 && back.data.shop.active === true, "a field user can restore an archived shop");
 }
 
+// admin deletes an archived shop together with its check-ins
+{
+  const mk = await call("visits", { as: "sajina", method: "POST", body: { shopName: "Throwaway Shop", shopType: "Retailer", area: "Balkhu", outcome: "no", phone: "9800000123", lat: 27.684, lng: 85.298, accuracy: 10 } });
+  const sid = mk.data.shop.id;
+  ok((await call("admin", { as: "mijesh", method: "POST", body: { op: "deleteShop", id: sid } })).code === 400, "an active shop cannot be deleted");
+  await call("shops", { as: "mijesh", method: "PATCH", body: { id: sid, active: false } });
+  ok((await call("admin", { as: "sajina", method: "POST", body: { op: "deleteShop", id: sid } })).code === 403, "a field user cannot delete a shop");
+  const del = await call("admin", { as: "mijesh", method: "POST", body: { op: "deleteShop", id: sid } });
+  ok(del.code === 200 && del.data.visits === 1 && !(await store.hget("field:shops", sid)), "admin deletes an archived shop and its check-ins");
+}
+
 console.log(`All ${passed} checks passed.`);

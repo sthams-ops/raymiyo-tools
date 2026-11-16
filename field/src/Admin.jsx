@@ -427,6 +427,20 @@ function ShopForm({ shop, data, canEdit, reload, say, close }) {
   const [f, setF] = useState({ name: shop.name, type: shop.type, area: shop.area || "", phone: shop.phone || "", owner: shop.owner, terms: shop.terms || "", margin: shop.margin ?? "" });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [sure, setSure] = useState(false);
+  async function remove() {
+    setBusy(true);
+    setErr("");
+    try {
+      await api.admin("deleteShop", { id: shop.id });
+      await reload();
+      say("Shop deleted.");
+      close();
+    } catch (e) {
+      setErr(e.message || "Could not delete the shop.");
+      setBusy(false);
+    }
+  }
   const people = data.users.filter((u) => u.active && u.role !== "viewer");
   async function send(patch, done) {
     setBusy(true);
@@ -491,8 +505,18 @@ function ShopForm({ shop, data, canEdit, reload, say, close }) {
             {shop.active === false ? "Restore shop" : "Archive shop"}
           </button>
         )}
+        {canEdit && shop.active === false && !sure && <button className="btn danger" disabled={busy} onClick={() => setSure(true)}>Delete shop</button>}
         <button className="btn" disabled={busy} onClick={close}>Close</button>
       </div>
+      {sure && (
+        <div className="warnbox">
+          <span>Delete {shop.name} and all its check-ins from the app? Points from those check-ins go too. This cannot be undone. Sales Orders and the Account in CRM are not touched.</span>
+          <div className="chips">
+            <button className="btn danger" disabled={busy} onClick={remove}>Yes, delete it</button>
+            <button className="btn" disabled={busy} onClick={() => setSure(false)}>Keep it</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

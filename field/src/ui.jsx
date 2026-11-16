@@ -331,3 +331,16 @@ export function Toast({ text }) {
     </div>
   );
 }
+
+// The clover mark with the app name. One place, so the brand looks the same everywhere.
+export function Brand() {
+  return (
+    <div className="brand">
+      <img src="/brand/raymiyo-mark.png" alt="" width="38" height="38" />
+      <span>
+        <b>Raymiyo Field</b>
+        <small>Kathmandu direct sales</small>
+      </span>
+    </div>
+  );
+}

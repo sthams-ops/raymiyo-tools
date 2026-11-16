@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api.js";
 import MapView from "./MapView.jsx";
-import { Board, VisitRow, fmtDay } from "./ui.jsx";
+import { Board, VisitRow, fmtDay, Brand } from "./ui.jsx";
 import { buildMapData, indexBy } from "./mapdata.js";
 import { money } from "../shared/rules.js";
 
@@ -35,7 +35,7 @@ export default function TV() {
   return (
     <div className="tv">
       <header className="tvhead">
-        <div className="brand">Raymiyo Field<span>Kathmandu direct sales</span></div>
+        <Brand />
         <div className="tvnow">
           {fmtDay(data.today)} · updated {data.time}
           {err ? " · connection lost, retrying" : ""}
