@@ -116,13 +116,14 @@ try
 			{
 				try
 				{
-					pic = invokeurl
+					chequeFile = invokeurl
 					[
 						url :photoUrl
 						type :GET
+						response-format :FILE
 					];
-					pic.setFileName("cheque-" + cd + ".jpg");
-					zoho.crm.attachFile("Invoices",invId.toLong(),pic);
+					chequeFile.setFileName("cheque-" + cd + ".jpg");
+					info zoho.crm.attachFile("Invoices",invId.toLong(),chequeFile);
 				}
 				catch (e6)
 				{
