@@ -39,3 +39,12 @@ export function addDays(date, days) {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+// A check-in saved without signal arrives late. The phone sends the moment it
+// really happened; it is used when it is not in the future and under a week old.
+export function when(at) {
+  const t = typeof at === "string" ? Date.parse(at) : NaN;
+  const now = Date.now();
+  if (!Number.isFinite(t) || t > now + 5 * 60000 || t < now - 7 * 86400000) return new Date(now);
+  return new Date(t);
+}

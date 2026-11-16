@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, LogOut, RefreshCw, Smartphone } from "lucide-react";
 import { api } from "./api.js";
+import { flush, loadOutbox, watchOutbox, withOutbox, saveState, savedState } from "./outbox.js";
 import Rep from "./Rep.jsx";
 import Admin from "./Admin.jsx";
 import TV from "./TV.jsx";
@@ -53,27 +54,64 @@ function Signed() {
     toastTimer.current = setTimeout(() => setToast(""), 3500);
   }, []);
 
+  const [offline, setOffline] = useState(null); // null, or the time of the saved data being shown
+  const [waiting, setWaiting] = useState([]); // work kept on this phone until there is signal
+  const who = useRef("");
+
   const reload = useCallback(async () => {
     try {
       const r = range.current;
       const next = await api.state(r && r.from, r && r.to);
       setData(next);
       setStatus("in");
+      setOffline(null);
+      who.current = next.me.email;
+      if (!r) saveState(next);
     } catch (e) {
-      if (e.status === 401) setStatus("out");
-      else {
-        setProblem(e.message);
-        setStatus((s) => (s === "in" ? "in" : "error"));
+      if (e.status === 401) return setStatus("out");
+      // No signal: open with what this phone saw last.
+      const kept = e.offline ? savedState() : null;
+      if (kept) {
+        who.current = kept.data.me.email;
+        setData((d) => d || kept.data);
+        setOffline(kept.at);
+        setStatus("in");
+        return;
       }
+      setProblem(e.message);
+      setStatus((s) => (s === "in" ? "in" : "error"));
     }
   }, []);
 
-  useEffect(() => {
-    reload();
-    // Keep the admin map fresh while the tab is open.
-    const timer = setInterval(() => document.visibilityState === "visible" && reload(), 30000);
-    return () => clearInterval(timer);
+  // Send whatever is waiting, then refresh. Runs when the app opens, when the
+  // signal returns, when the app comes back to the front, and every 30 seconds.
+  const sync = useCallback(async () => {
+    if (who.current) await flush(who.current).catch(() => {});
+    await reload();
   }, [reload]);
+
+  useEffect(() => {
+    const stop = watchOutbox(setWaiting);
+    loadOutbox();
+    // Open at once with what this phone saw last; the fresh data replaces it a moment later.
+    const kept = savedState();
+    if (kept) {
+      who.current = kept.data.me.email;
+      setData(kept.data);
+      setStatus("in");
+    }
+    reload().then(() => who.current && flush(who.current).then((n) => n && reload()).catch(() => {}));
+    const tick = () => document.visibilityState === "visible" && sync();
+    const timer = setInterval(tick, 30000);
+    window.addEventListener("online", sync);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      stop();
+      clearInterval(timer);
+      window.removeEventListener("online", sync);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [reload, sync]);
 
   const setRange = useCallback(
     (r) => {
@@ -98,6 +136,8 @@ function Signed() {
   if (status === "out") return <Login />;
 
   const me = data.me;
+  const view = withOutbox(data, waiting);
+  const mine = waiting.filter((i) => i.user === me.email);
   return (
     <>
       <header className="top">
@@ -105,15 +145,15 @@ function Signed() {
         <div className="me">
           {installer && (
             <button className="btn small" onClick={async () => { installer.prompt(); await installer.userChoice.catch(() => {}); setInstaller(null); }}>
-              <Download size={15} /> Install app
+              <Download size={15} /> <span className="long">Install app</span>
             </button>
           )}
           {me.role === "admin" && (
-            <button className="btn small" onClick={() => setTryField((v) => !v)}>
-              <Smartphone size={15} /> {tryField ? "Back to admin" : "Try field screen"}
+            <button className="btn small" aria-label={tryField ? "Back to admin view" : "Try the field screen"} onClick={() => setTryField((v) => !v)}>
+              <Smartphone size={15} /> {tryField ? "Admin" : "Field"}<span className="long">{tryField ? " view" : " screen"}</span>
             </button>
           )}
-          <button className="icon" aria-label="Refresh" onClick={async () => { setSpinning(true); await reload(); setSpinning(false); }}>
+          <button className="icon" aria-label="Refresh" onClick={async () => { setSpinning(true); await sync(); setSpinning(false); }}>
             <RefreshCw size={18} className={spinning ? "spin" : ""} />
           </button>
           <Avatar user={me} size={34} />
@@ -124,7 +164,13 @@ function Signed() {
           <a className="icon" href="/api/auth?action=logout" aria-label="Sign out"><LogOut size={18} /></a>
         </div>
       </header>
-      {me.role === "rep" || (me.role === "admin" && tryField) ? <Rep data={data} reload={reload} say={say} /> : <Admin data={data} reload={reload} setRange={setRange} say={say} />}
+      {(offline || mine.length > 0) && (
+        <p className="banner offline" role="status">
+          {offline ? `No signal. Showing what this phone saved at ${new Date(offline).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. ` : ""}
+          {mine.length > 0 ? `${mine.length} ${mine.length === 1 ? "item is" : "items are"} saved on this phone and will send when the signal is back.` : offline ? "You can keep working. Check-ins are saved on this phone." : ""}
+        </p>
+      )}
+      {me.role === "rep" || (me.role === "admin" && tryField) ? <Rep data={view} reload={sync} say={say} waiting={mine} /> : <Admin data={data} reload={reload} setRange={setRange} say={say} />}
       <Toast text={toast} />
     </>
   );

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Camera, ChevronRight, MapPin, Play, Search, Square } from "lucide-react";
 import { api } from "./api.js";
+import { submit, flush, discard } from "./outbox.js";
 import { getPosition, shrinkPhoto } from "./geo.js";
 import MapView from "./MapView.jsx";
 import { Board, VisitRow, VisitFacts, FocusList, firstName } from "./ui.jsx";
@@ -11,7 +12,7 @@ import { OUTCOMES, distanceMeters, visitPoints, focusList, findDuplicate, phoneK
 
 const fmtDist = (m) => (m < 1000 ? m + " m" : (m / 1000).toFixed(1) + " km");
 
-export default function Rep({ data, reload, say }) {
+export default function Rep({ data, reload, say, waiting = [] }) {
   const me = data.me;
   const day = data.days[me.email] || null;
   const started = !!(day && day.start && !day.end);
@@ -57,9 +58,9 @@ export default function Rep({ data, reload, say }) {
     setBusy(action);
     try {
       const p = await getPosition();
-      await api.day(action, p);
-      await reload();
-      say(action === "start" ? "Day started. Location saved." : "Day ended. Good work today.");
+      const r = await submit("day", { action, ...p }, { user: me.email, label: action === "start" ? "Start day" : "End day" });
+      if (!r.queued) await reload();
+      say(r.queued ? (action === "start" ? "Day started. No signal, so it is saved on this phone for now." : "Day ended. No signal, so it is saved on this phone for now.") : action === "start" ? "Day started. Location saved." : "Day ended. Good work today.");
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -132,37 +133,43 @@ export default function Rep({ data, reload, say }) {
     setErr("");
     setBusy("saving");
     try {
-      let photo = "";
-      let photoNote = "";
+      // The photo is shrunk here and travels with the check-in, so it is not lost without signal.
+      let photoData = "";
       if (draft.file && data.features.photos) {
         try {
-          photo = (await api.photo(await shrinkPhoto(draft.file))).url;
-        } catch {
-          photoNote = " The photo could not be saved.";
-        }
+          photoData = await shrinkPhoto(draft.file);
+        } catch {}
       }
       const shopPart = draft.isNew
         ? { shopName: draft.newName, shopType: draft.newType || "Retailer", area: draft.newArea || "", phone: draft.newPhone || "" }
         : { shopId: draft.shopId, phone: draft.phone || "" };
-      const out = await api.createVisit({
-        ...shopPart,
-        outcome: draft.outcome,
-        value,
-        items: draft.outcome === "order" ? items : [],
-        margin: draft.margin === undefined || draft.margin === "" ? undefined : Number(draft.margin),
-        terms: draft.terms || "Cash",
-        brands: draft.brands || [],
-        note: draft.note || "",
-        followUp: draft.followUp || "",
-        photo,
-        lat: pos.lat,
-        lng: pos.lng,
-        accuracy: pos.accuracy,
-      });
-      await reload();
+      const shopLabel = draft.isNew ? draft.newName : (shops[draft.shopId] && shops[draft.shopId].name) || "a shop";
+      const r = await submit(
+        "visit",
+        {
+          ...shopPart,
+          outcome: draft.outcome,
+          value,
+          items: draft.outcome === "order" ? items : [],
+          margin: draft.margin === undefined || draft.margin === "" ? undefined : Number(draft.margin),
+          terms: draft.terms || "Cash",
+          brands: draft.brands || [],
+          note: draft.note || "",
+          followUp: draft.followUp || "",
+          lat: pos.lat,
+          lng: pos.lng,
+          accuracy: pos.accuracy,
+        },
+        { user: me.email, label: `${OUTCOMES[draft.outcome] || "Check-in"} at ${shopLabel}`, photoData }
+      );
       setStep("home");
-      setSel(out.visit.id);
-      say(`Saved. +${visitPoints(out.visit, data.settings.points)} points.${photoNote}`);
+      if (r.queued) {
+        say("No signal. The check-in is saved on this phone and will send by itself.");
+      } else {
+        await reload();
+        setSel(r.out.visit.id);
+        say(`Saved. +${visitPoints(r.out.visit, data.settings.points)} points.`);
+      }
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -452,6 +459,28 @@ export default function Rep({ data, reload, say }) {
           </div>
         )}
 
+        {waiting.length > 0 && (
+          <div className="card waitcard">
+            <div className="head">
+              <h2>Waiting to send ({waiting.length})</h2>
+              <button className="btn small" disabled={busy === "send"} onClick={async () => { setBusy("send"); const n = await flush(me.email).catch(() => 0); await reload(); setBusy(""); say(n ? `${n} sent.` : "Still no signal. It will send by itself."); }}>
+                {busy === "send" ? "Sending…" : "Send now"}
+              </button>
+            </div>
+            <p className="muted small">Saved on this phone. Keep working; these go to the office as soon as there is signal. Points show after they are sent.</p>
+            <div className="rows">
+              {waiting.map((w) => (
+                <div key={w.id} className="row plain">
+                  <span className="what">
+                    <b>{w.label || "Saved item"}</b>
+                    <small className={w.error ? "owes" : ""}>{w.error ? "Not accepted: " + w.error : "Saved at " + new Date(w.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</small>
+                  </span>
+                  {w.error && <button className="btn small danger" onClick={() => discard(w.id)}>Remove</button>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="card">
           <div className="head">
             <h2>{view === "focus" ? "Your focus list" : `My shops (${myShops.length})`}</h2>
@@ -466,19 +495,19 @@ export default function Rep({ data, reload, say }) {
               {urgent.length > 0 && (
                 <div className="focusList">
                   <h3>Do these first ({urgent.length})</h3>
-                  <FocusList items={urgent} reload={reload} say={say} />
+                  <FocusList items={urgent} reload={reload} say={say} user={me.email} waiting={waiting} />
                 </div>
               )}
               {pushes.length > 0 && (
                 <div className="focusList">
                   <h3>Push these shops ({pushes.length})</h3>
-                  <FocusList items={pushes.slice(0, 8)} reload={reload} say={say} />
+                  <FocusList items={pushes.slice(0, 8)} reload={reload} say={say} user={me.email} waiting={waiting} />
                 </div>
               )}
               {soon.length > 0 && (
                 <div className="focusList">
                   <h3>Coming up ({soon.length})</h3>
-                  <FocusList items={soon.slice(0, 8)} reload={reload} say={say} />
+                  <FocusList items={soon.slice(0, 8)} reload={reload} say={say} user={me.email} waiting={waiting} />
                 </div>
               )}
             </>

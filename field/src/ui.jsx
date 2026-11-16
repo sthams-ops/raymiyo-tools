@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Camera, Check, Navigation, Phone, X } from "lucide-react";
 import { api } from "./api.js";
+import { submit } from "./outbox.js";
 import { shrinkPhoto } from "./geo.js";
 import { OUTCOMES, money, visitPoints, shopOwes } from "../shared/rules.js";
 
@@ -82,7 +83,7 @@ function PayForm({ item, allowLater, onSave, onCancel, busy, err }) {
 }
 
 // One line of the to-do list: what to do at which shop, with call and directions.
-function FocusRow({ item, owner, canAct, act, open, setOpen, busy, err }) {
+function FocusRow({ item, owner, canAct, held, act, open, setOpen, busy, err }) {
   const s = item.shop;
   const paying = open === item.key;
   const owes = shopOwes(s);
@@ -99,6 +100,7 @@ function FocusRow({ item, owner, canAct, act, open, setOpen, busy, err }) {
         {owner ? " · " + firstName(owner) : ""}
       </p>
       {owes > 0 && item.kind !== "collect" && item.kind !== "cheque" && <p className="owes">Owes {money(owes)}</p>}
+      {held && <p className="small"><span className="tag lv-today">Waiting to send</span></p>}
       {s.lastNote && !item.due_ && <p className="quote">“{s.lastNote}”</p>}
       {!paying && (
         <div className="focusActs">
@@ -123,28 +125,41 @@ function FocusRow({ item, owner, canAct, act, open, setOpen, busy, err }) {
 
 // The to-do list with its buttons. users is only passed on the admin screen,
 // where each line also names the person.
-export function FocusList({ items, users, canAct = true, reload, say }) {
+export function FocusList({ items, users, canAct = true, reload, say, user = "", waiting = [] }) {
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // Shops with something saved on the phone and not sent yet: no second tap.
+  const held = new Set(waiting.filter((w) => w.kind === "act" && !w.error).map((w) => w.body.shopId));
   async function act(item, action, f) {
     setBusy(true);
     setErr("");
     try {
       const extra = { visitId: item.due_ ? item.due_.visitId : undefined };
+      let photoData = "";
       if (f) {
-        let photo = "";
         if (f.type === "cheque") {
           if (!f.file) throw new Error("Take a photo of the cheque.");
-          photo = (await api.photo(await shrinkPhoto(f.file))).url;
+          photoData = await shrinkPhoto(f.file);
         }
-        extra.pay = { type: f.type, amount: Number(String(f.amount).replace(/[^0-9.]/g, "")), date: f.date, photo };
+        extra.pay = { type: f.type, amount: Number(String(f.amount).replace(/[^0-9.]/g, "")), date: f.date, photo: "" };
       }
-      const out = await api.shopAct(item.shop.id, action, extra);
-      await reload();
+      let out;
+      let queued = false;
+      if (user) {
+        const names = { done: "Follow-up done", deliver: "Delivered", collect: "Payment collected", cleared: "Cheque cleared" };
+        const r = await submit("act", { shopId: item.shop.id, action, extra }, { user, label: `${names[action] || "Update"}: ${item.shop.name}`, photoData, photoNeeded: !!photoData });
+        out = r.out;
+        queued = !!r.queued;
+      } else {
+        if (photoData) extra.pay.photo = (await api.photo(photoData)).url;
+        out = await api.shopAct(item.shop.id, action, extra);
+      }
       setOpen(null);
-      const waiting = out.visit && out.visit.payCrm === "waiting";
-      say(action === "done" ? "Ticked off. Well done." : action === "cleared" ? "Cheque marked as cleared." : waiting ? "Saved. It goes on the CRM invoice once the order is marked Delivered there." : "Saved.");
+      if (queued) return say("No signal. Saved on this phone; it will send by itself.");
+      await reload();
+      const waitingCrm = out && out.visit && out.visit.payCrm === "waiting";
+      say(action === "done" ? "Ticked off. Well done." : action === "cleared" ? "Cheque marked as cleared." : waitingCrm ? "Saved. It goes on the CRM invoice once the order is marked Delivered there." : "Saved.");
     } catch (e) {
       setErr(e.message);
       if (!f) say(e.message);
@@ -155,7 +170,7 @@ export function FocusList({ items, users, canAct = true, reload, say }) {
   return (
     <div className="focusList">
       {items.map((f) => (
-        <FocusRow key={f.key || f.shop.id} item={{ ...f, key: f.key || f.shop.id }} owner={users ? users[f.shop.owner] : null} canAct={canAct} act={act} open={open} setOpen={(k) => { setErr(""); setOpen(k); }} busy={busy} err={err} />
+        <FocusRow key={f.key || f.shop.id} item={{ ...f, key: f.key || f.shop.id }} owner={users ? users[f.shop.owner] : null} canAct={canAct && !held.has(f.shop.id)} held={held.has(f.shop.id)} act={act} open={open} setOpen={(k) => { setErr(""); setOpen(k); }} busy={busy} err={err} />
       ))}
     </div>
   );

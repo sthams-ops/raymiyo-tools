@@ -5,7 +5,8 @@ import { store } from "../lib/store.js";
 import { guard, readBody, clean, fail, loadUsers } from "../lib/auth.js";
 import { doneVisit, syncVisit, sendPayment } from "../lib/crm.js";
 import { loadSettings } from "../lib/data.js";
-import { nepal, addDays, isDate } from "../lib/time.js";
+import { nepal, when, addDays, isDate } from "../lib/time.js";
+import { replay } from "../lib/idem.js";
 import { phoneKey, findDuplicate, visitPoints } from "../shared/rules.js";
 
 const PHOTO = /^(https:\/\/[^\s]+|\/photos\/[\w\-\/]+\.jpg)$/;
@@ -54,6 +55,7 @@ async function act(req, res) {
   const me = await guard(req, res, ["rep", "admin"]);
   if (!me) return;
   const b = readBody(req);
+  if (await replay(req, res, b, me.email)) return;
   const shop = await store.hget("field:shops", String(b.id || ""));
   if (!shop) return res.status(404).json({ error: "That shop was not found." });
   // Anyone standing at an archived shop can bring it back, so it is never saved twice.
@@ -63,7 +65,7 @@ async function act(req, res) {
     return res.json({ shop });
   }
   if (me.role === "rep" && shop.owner !== me.email) return res.status(403).json({ error: "This shop belongs to someone else." });
-  const { date: today, time } = nepal();
+  const { date: today, time } = nepal(when(b.at));
   shop.dues = shop.dues || [];
 
   if (b.action === "deliver" || b.action === "collect") {

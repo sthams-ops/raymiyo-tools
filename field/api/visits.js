@@ -5,8 +5,9 @@
 import { store } from "../lib/store.js";
 import { guard, loadUsers, readBody, clean, fail, rid } from "../lib/auth.js";
 import { loadSettings, stageFor } from "../lib/data.js";
-import { nepal, addDays, isDate } from "../lib/time.js";
+import { when, nepal, addDays, isDate } from "../lib/time.js";
 import { syncVisit, cancelVisit } from "../lib/crm.js";
+import { replay } from "../lib/idem.js";
 import { OUTCOMES, NEXT_STEPS, distanceMeters, visitPoints, phoneKey, findDuplicate, orderTotals } from "../shared/rules.js";
 import { loadProducts } from "../lib/products.js";
 
@@ -96,6 +97,7 @@ async function create(req, res) {
   const me = await guard(req, res, ["rep", "admin"]);
   if (!me) return;
   const b = readBody(req);
+  if (await replay(req, res, b, me.email)) return;
   const lat = Number(b.lat);
   const lng = Number(b.lng);
   if (b.lat == null || b.lng == null || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
@@ -104,7 +106,7 @@ async function create(req, res) {
   if (!OUTCOMES[b.outcome]) return bad(res, "Pick what happened at the shop.");
 
   const settings = await loadSettings();
-  const { date, time, month } = nepal();
+  const { date, time, month } = nepal(when(b.at));
   let shop;
   let newShop = false;
   const phone = phoneKey(b.phone);

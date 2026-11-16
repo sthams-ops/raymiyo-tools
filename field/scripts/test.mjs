@@ -253,4 +253,16 @@ ok(r.code === 200 && r.data.visits.length === 1 && !("me" in r.data), "TV feed w
   ok(del.code === 200 && del.data.visits === 1 && !(await store.hget("field:shops", sid)), "admin deletes an archived shop and its check-ins");
 }
 
+// offline check-ins: a re-send never saves twice, and the real time is kept
+{
+  const at = new Date(Date.now() - 3 * 3600000).toISOString();
+  const body = { clientId: "c-test-1", at, shopName: "Offline Shop", shopType: "Retailer", area: "Thankot", outcome: "interested", phone: "9800000456", lat: 27.69, lng: 85.2, accuracy: 10 };
+  const a = await call("visits", { as: "sajina", method: "POST", body });
+  const b2 = await call("visits", { as: "sajina", method: "POST", body });
+  ok(a.code === 200 && b2.code === 200 && a.data.visit.id === b2.data.visit.id, "sending the same check-in twice saves it once");
+  ok(a.data.visit.time === nepal(new Date(at)).time, "a late check-in keeps the time it really happened");
+  const future = await call("visits", { as: "sajina", method: "POST", body: { ...body, clientId: "c-test-2", shopName: undefined, shopId: a.data.shop.id, at: new Date(Date.now() + 86400000).toISOString() } });
+  ok(future.code === 200 && future.data.visit.date === nepal().date, "a time in the future is ignored");
+}
+
 console.log(`All ${passed} checks passed.`);

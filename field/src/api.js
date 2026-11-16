@@ -1,10 +1,24 @@
 // Every call the screens make to the server, in one place.
 async function call(path, options = {}) {
-  const res = await fetch(path, {
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  // On a weak signal a request can hang for minutes. Give up after a while so
+  // the app can keep the work on the phone and send it later.
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), path.startsWith("/api/photo") ? 45000 : 20000);
+  let res;
+  try {
+    res = await fetch(path, {
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      signal: stop.signal,
+      ...options,
+    });
+  } catch {
+    const err = new Error("No signal. Check your internet and try again.");
+    err.offline = true;
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
   let data = {};
   try {
     data = await res.json();
@@ -12,6 +26,7 @@ async function call(path, options = {}) {
   if (!res.ok) {
     const err = new Error(data.error || `The server answered ${res.status}. Try again.`);
     err.status = res.status;
+    err.data = data;
     throw err;
   }
   return data;

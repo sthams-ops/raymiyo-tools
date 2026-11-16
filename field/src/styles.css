@@ -282,3 +282,58 @@ th { font-size: 12.5px; font-weight: 600; color: var(--muted); }
 .totals { display: grid; gap: 3px; border-radius: 14px; padding: 11px 13px; background: var(--soft); font-weight: 700; }
 .totals div { display: flex; justify-content: space-between; gap: 10px; }
 .totals .grand { font-family: var(--display); font-size: 18px; font-weight: 700; }
+
+/* offline */
+.waitcard { border-color: var(--gold); background: #fffdf6; }
+
+/* phones: fit every screen, notch and home bar included */
+html { height: 100%; }
+body { min-height: 100%; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+button, a, input, select, label { touch-action: manipulation; }
+.center, .login, .tv { min-height: 100vh; min-height: 100dvh; }
+.top { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+.shell { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
+.toast { bottom: calc(18px + env(safe-area-inset-bottom)); }
+.map { height: 46vh; height: 46dvh; }
+img, video { max-width: 100%; }
+/* Fingers need bigger targets than a mouse: 44px is the size Apple and Google both ask for. */
+@media (pointer: coarse) {
+  .btn, .chip, .tabs button, .seg button { min-height: 44px; }
+  .btn.small { min-height: 40px; padding: 8px 12px; }
+  .seg button { padding: 8px 14px; }
+  .icon { width: 42px; height: 42px; }
+  .step button, .step input { width: 44px; height: 44px; }
+  .step input { width: 54px; }
+  .row { min-height: 52px; }
+  .link { min-height: 44px; }
+}
+/* Small phones (360 to 400 wide): keep the top bar on one line and give cards more room. */
+@media (max-width: 520px) {
+  .top { gap: 8px; }
+  .top .btn span.long { display: none; }
+  .top .btn { padding: 8px 10px; }
+  .me { gap: 6px; }
+  .shell { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); gap: 10px; }
+  .card { padding: 14px; border-radius: 14px; }
+  .tabs { padding-left: 12px; padding-right: 12px; }
+  .tabs button { margin-right: 10px; }
+  .banner { margin-left: 12px; margin-right: 12px; }
+  .focusActs .btn { flex: 1 1 auto; justify-content: center; }
+  .two { gap: 8px; }
+}
+@media (max-width: 380px) {
+  .brand img { width: 34px; height: 34px; }
+  .brand b { font-size: 15px; }
+  .stat b { font-size: 21px; }
+  .top .avatar { display: none; }
+}
+/* Sideways phone: the map must not swallow the whole screen. */
+@media (orientation: landscape) and (max-height: 520px) { .map { height: 70vh; height: 70dvh; min-height: 200px; } }
+/* Top bar never spills: the name shortens before any button is pushed off screen. */
+.brand { flex: 1 1 0; }
+.brand span { min-width: 0; }
+.brand b, .brand small { overflow: hidden; text-overflow: ellipsis; }
+.me { flex: none; }
+/* On a phone the map is a glance, the work is below it: keep the main button on the first screen. */
+@media (max-width: 959px) { .map { height: 32vh; height: 32dvh; min-height: 210px; } }
+@media (pointer: coarse) { .maplibregl-ctrl-group button { width: 40px; height: 40px; } }
