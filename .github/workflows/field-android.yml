@@ -1,0 +1,87 @@
+# Builds the Raymiyo Field Android app (field/mobile) into an .apk file.
+# Runs by itself when field/mobile changes, or by hand:
+#   GitHub -> Actions -> "Field Android app" -> Run workflow.
+# With the secret FIELD_KEYSTORE_PASSWORD set, it signs the app and publishes it
+# under Releases as Raymiyo-Field.apk. Without it, it only checks the app builds.
+name: Field Android app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, field-app]
+    paths:
+      - "field/mobile/**"
+      - ".github/workflows/field-android.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: field-android
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: field/mobile
+    env:
+      FIELD_KEYSTORE_PASSWORD: ${{ secrets.FIELD_KEYSTORE_PASSWORD }}
+      FIELD_VERSION_CODE: ${{ github.run_number }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install the app's parts
+        run: npm ci
+
+      - name: Copy settings into the Android project
+        run: npx cap sync android 2>&1 | tee build.log
+
+      - name: Build the app
+        run: |
+          cd android
+          chmod +x gradlew
+          if [ -n "$FIELD_KEYSTORE_PASSWORD" ]; then
+            ./gradlew --no-daemon assembleRelease 2>&1 | tee -a ../build.log
+            cp app/build/outputs/apk/release/app-release.apk ../Raymiyo-Field.apk
+          else
+            echo "No signing password yet: test build only."
+            ./gradlew --no-daemon assembleDebug 2>&1 | tee -a ../build.log
+          fi
+
+      - name: Publish the signed app
+        if: env.FIELD_KEYSTORE_PASSWORD != ''
+        run: |
+          tag="field-android-v1.0.${FIELD_VERSION_CODE}"
+          gh release create "$tag" Raymiyo-Field.apk \
+            --target "$GITHUB_SHA" \
+            --title "Raymiyo Field for Android 1.0.${FIELD_VERSION_CODE}" \
+            --notes "Install: open Raymiyo-Field.apk on the Android phone and allow the install. It updates the app already on the phone." \
+            --latest
+
+      - name: Note the result on the commit
+        if: always()
+        run: |
+          {
+            echo "Field Android build: ${{ job.status }} (run ${FIELD_VERSION_CODE}, signed: $([ -n "$FIELD_KEYSTORE_PASSWORD" ] && echo yes || echo no))"
+            if [ "${{ job.status }}" != "success" ]; then
+              echo '```'
+              grep -n -i -E "error|FAILED|what went wrong|exception" build.log | tail -n 25 || true
+              echo '--- last lines ---'
+              tail -n 40 build.log || true
+              echo '```'
+            fi
+          } > note.txt
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -F body=@note.txt > /dev/null || true
