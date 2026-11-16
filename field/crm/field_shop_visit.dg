@@ -116,14 +116,12 @@ try
 			{
 				try
 				{
-					chequeFile = invokeurl
-					[
-						url :photoUrl
-						type :GET
-						response-format :FILE
-					];
-					chequeFile.setFileName("cheque-" + cd + ".jpg");
-					info zoho.crm.attachFile("Invoices",invId.toLong(),chequeFile);
+					note = Map();
+					note.put("Note_Title","Cheque photo " + cd);
+					note.put("Note_Content",photoUrl);
+					note.put("Parent_Id",invId);
+					note.put("se_module","Invoices");
+					noteSaved = zoho.crm.createRecord("Notes",note);
 				}
 				catch (e6)
 				{
