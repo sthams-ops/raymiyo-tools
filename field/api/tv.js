@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import { store } from "../lib/store.js";
 import { loadUsers, fail } from "../lib/auth.js";
 import { loadSettings, loadVisits, buildBoard, publicUser } from "../lib/data.js";
-import { nepal, weekStart } from "../lib/time.js";
+import { nepal, weekStart, addDays } from "../lib/time.js";
 import { loadTracks } from "../lib/track.js";
 
 function sameKey(a, b) {
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
       loadTracks(today),
     ]);
     const monthStart = today.slice(0, 7) + "-01";
-    const lo = [weekStart(today), monthStart].sort()[0];
+    const lo = [weekStart(today), monthStart, addDays(today, -1)].sort()[0];
     const all = await loadVisits(lo, today);
     res.setHeader("Cache-Control", "no-store");
     res.json({

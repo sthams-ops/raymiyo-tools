@@ -337,3 +337,49 @@ img, video { max-width: 100%; }
 /* On a phone the map is a glance, the work is below it: keep the main button on the first screen. */
 @media (max-width: 959px) { .map { height: 32vh; height: 32dvh; min-height: 210px; } }
 @media (pointer: coarse) { .maplibregl-ctrl-group button { width: 40px; height: 40px; } }
+
+/* ---------- feels like an installed app on a phone ---------- */
+/* No zoom, no sideways drift, no page bounce or pull-to-refresh; the map keeps its own gestures. */
+html { touch-action: pan-x pan-y; overscroll-behavior: none; overflow-x: hidden; overflow-x: clip; }
+body { overscroll-behavior: none; overflow-x: clip; -webkit-touch-callout: none; }
+button, nav, .top, .seg, .chip, .pill, .tag, .stat, h2, h3, label > span { -webkit-user-select: none; user-select: none; }
+.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+/* iPhone date boxes have a fixed width of their own and used to push into each other. */
+input[type="date"] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%; min-height: 48px; text-align: left; }
+input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+.chips.even { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.chips.even .chip { padding-left: 4px; padding-right: 4px; text-align: center; white-space: nowrap; }
+.seg { max-width: 100%; }
+.onlyPhone { display: none; }
+.repnav { display: none; }
+.appnav button em { position: absolute; top: 4px; left: calc(50% + 6px); min-width: 18px; padding: 0 5px; border-radius: 99px; background: var(--bad); color: #fff; font-style: normal; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+@media (pointer: coarse) {
+  button:active, .cta:active, a.btn:active { opacity: 0.7; }
+  .seg button { padding: 8px 12px; }
+}
+@media (max-width: 759px) {
+  /* Sections sit in a bar at the bottom, where the thumb is, as on every phone app. */
+  .appnav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; max-width: none; margin: 0; padding: 6px max(6px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left)); overflow: visible; background: var(--card); box-shadow: 0 -1px 0 var(--line), 0 -10px 24px -18px rgba(21, 48, 42, 0.5); }
+  .appnav button { position: relative; display: grid; justify-items: center; gap: 2px; min-width: 0; min-height: 50px; margin: 0; padding: 5px 0 3px; border: 0; border-radius: 12px; background: none; color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1.1; }
+  .appnav button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .appnav button svg { box-sizing: content-box; padding: 3px 14px; border-radius: 99px; }
+  .appnav button[aria-current="page"] { border: 0; color: var(--brand-deep); font-weight: 700; }
+  .appnav button[aria-current="page"] svg { background: var(--brand-wash); }
+  .shell, .shell.hasnav { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  .toast { bottom: calc(86px + env(safe-area-inset-bottom)); }
+  .repnav { display: grid; }
+  /* The field user's phone shows one screen at a time. */
+  .shell[data-tab="today"] :is(.t-todo, .t-race),
+  .shell[data-tab="todo"] :is(.t-today, .t-race, .map),
+  .shell[data-tab="race"] :is(.t-today, .t-todo, .map) { display: none; }
+  .head .seg { display: flex; width: 100%; }
+  .head .seg button { flex: 1 1 0; padding-left: 4px; padding-right: 4px; white-space: nowrap; }
+  .onlyPhone { display: grid; }
+  .onlyWide { display: none; }
+  .stats.four .stat b { font-size: 21px; }
+}
+@media (max-width: 380px) {
+  .chips.even .chip { font-size: 12.5px; }
+  .appnav button svg { padding: 3px 10px; }
+}
+@media (max-width: 520px) { .brand .long { display: none; } }

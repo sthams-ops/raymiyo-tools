@@ -4,7 +4,7 @@
 import { store } from "../lib/store.js";
 import { guard, loadUsers, fail, OWNER, DOMAIN } from "../lib/auth.js";
 import { loadSettings, loadVisits, buildBoard, publicUser } from "../lib/data.js";
-import { nepal, isDate, weekStart } from "../lib/time.js";
+import { nepal, isDate, weekStart, addDays } from "../lib/time.js";
 import { crmEnabled } from "../lib/crm.js";
 import { loadTracks } from "../lib/track.js";
 import { loadProducts } from "../lib/products.js";
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
       store.hall("field:day:" + today),
     ]);
     const monthStart = today.slice(0, 7) + "-01";
-    const lo = [from, weekStart(today), monthStart].sort()[0];
+    const lo = [from, weekStart(today), monthStart, addDays(today, -1)].sort()[0];
     const hi = to > today ? to : today;
     const all = await loadVisits(lo, hi);
     const board = buildBoard(all, users, settings.points, today);

@@ -48,3 +48,10 @@ export function buildMapData({ visits, shops, users, days, tracks, showShops = t
     .map(([email, line]) => ({ key: email, color: people[email].color, coords: line.map((p) => [p[1], p[0]]) }));
   return { pins, dots, live, routes };
 }
+
+// The day before a "2026-11-16" style date.
+export function dayBefore(date) {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}

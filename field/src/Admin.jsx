@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, FileText, Gauge, MapPinned, Search, Settings as Cog, Store, Trash2, Users } from "lucide-react";
 import { api } from "./api.js";
 import MapView from "./MapView.jsx";
-import { Avatar, Board, VisitRow, VisitFacts, FocusList, fmtDay } from "./ui.jsx";
-import { buildMapData, indexBy, weekStartOf } from "./mapdata.js";
+import { Avatar, Board, VisitRow, VisitFacts, FocusList, fmtDay, PERIODS } from "./ui.jsx";
+import { buildMapData, indexBy, weekStartOf, dayBefore } from "./mapdata.js";
 import { toRows, downloadCsv, downloadPdf } from "./export.js";
 import { COLORS, OUTCOMES, ROLES, money, scoreboard, focusList, coach, shopOwes, daysBetween } from "../shared/rules.js";
 
@@ -34,11 +34,11 @@ export default function Admin({ data, reload, setRange, say }) {
 
   return (
     <>
-      <nav className="tabs" aria-label="Sections">
+      <nav className="tabs appnav" aria-label="Sections">
         {TABS.map(([key, label, Icon]) => (
-          <button key={key} aria-current={tab === key ? "page" : undefined} onClick={() => setTab(key)}>
-            <Icon size={18} />
-            {label}
+          <button key={key} aria-current={tab === key ? "page" : undefined} onClick={() => { setTab(key); window.scrollTo(0, 0); }}>
+            <Icon size={20} />
+            <span>{label}</span>
           </button>
         ))}
       </nav>
@@ -58,21 +58,22 @@ function Filters({ data, reps, person, setPerson, outcome, setOutcome, setRange,
   const t = data.today;
   const presets = [
     ["Today", t, t],
-    ["This week", weekStartOf(t), t],
-    ["This month", t.slice(0, 7) + "-01", t],
+    ["Yesterday", dayBefore(t), dayBefore(t)],
+    ["Week", weekStartOf(t), t],
+    ["Month", t.slice(0, 7) + "-01", t],
   ];
   // Only one preset lights up, even on a Sunday when "today" and "this week" are the same dates.
   const active = presets.find(([, from, to]) => data.from === from && data.to === to);
   return (
     <div className="filters">
-      <div className="chips" role="group" aria-label="Dates">
+      <div className="chips even" role="group" aria-label="Dates">
         {presets.map(([label, from, to]) => (
           <button key={label} className="chip" aria-pressed={!!active && active[0] === label} onClick={() => setRange({ from, to })}>
             {label}
           </button>
         ))}
       </div>
-      <div className="two">
+      <div className="two dates">
         <label className="field">
           From
           <input type="date" value={data.from} max={data.to} onChange={(e) => e.target.value && setRange({ from: e.target.value, to: data.to })} />
@@ -142,12 +143,12 @@ function Live(ctx) {
           <div className="head">
             <h3>The race</h3>
             <div className="seg" role="group" aria-label="Leaderboard period">
-              {[["today", "Today"], ["week", "Week"], ["month", "Month"]].map(([k, label]) => (
+              {PERIODS.map(([k, label]) => (
                 <button key={k} aria-pressed={period === k} onClick={() => setPeriod(k)}>{label}</button>
               ))}
             </div>
           </div>
-          <Board rows={data.board[period]} />
+          <Board rows={data.board[period] || []} />
         </div>
 
         <div className="card">
@@ -261,20 +262,23 @@ function VisitCard({ v, shop, user, data, canEdit, reload, say, close }) {
 const STATUS = { push: "Needs a push", watch: "Keep an eye", lead: "Leading", ok: "On track" };
 
 function Insights({ data, users, canEdit, reload, say }) {
-  const [period, setPeriod] = useState("week");
+  const [period, setPeriod] = useState("today");
+  const [dueView, setDueView] = useState("all");
   const t = data.today;
+  const day = period === "yesterday" ? dayBefore(t) : t;
   const dues = data.shops
     .filter((s) => s.active !== false)
     .flatMap((s) => (s.dues || []).map((d) => ({ shop: s, ...d, late: d.date ? daysBetween(d.date, t) : 0 })))
     .sort((a, b) => b.late - a.late);
+  const shownDues = dues.filter((d) => dueView === "all" || (dueView === "today" ? d.late === 0 : d.late > 0));
   const owed = dues.reduce((a, d) => a + d.amount, 0);
   const owedLate = dues.filter((d) => d.late > 0).reduce((a, d) => a + d.amount, 0);
-  const from = period === "week" ? weekStartOf(t) : t.slice(0, 7) + "-01";
+  const from = period === "week" ? weekStartOf(t) : period === "month" ? t.slice(0, 7) + "-01" : day;
   const focus = useMemo(() => focusList(data.shops, t, { reorderDays: data.settings.reorderDays }), [data.shops, t, data.settings.reorderDays]);
   const nowTime = new Date(Date.now() + 345 * 60000).toISOString().slice(11, 16);
   const people = useMemo(
-    () => coach(data.board[period], focus, { from, today: t, dailyVisits: data.settings.dailyVisits, todayRows: data.board.today, nowTime }),
-    [data.board, period, focus, from, t, data.settings.dailyVisits, nowTime]
+    () => coach(data.board[period] || [], focus, { from, today: day, dailyVisits: data.settings.dailyVisits, todayRows: data.board.today, nowTime, live: period !== "yesterday" }),
+    [data.board, period, focus, from, day, data.settings.dailyVisits, nowTime]
   );
   const total = people.reduce((a, r) => ({ visits: a.visits + r.visits, orders: a.orders + r.orders, value: a.value + r.value, newShops: a.newShops + r.newShops }), { visits: 0, orders: 0, value: 0, newShops: 0 });
   const overdue = focus.filter((f) => f.level === "overdue");
@@ -290,10 +294,12 @@ function Insights({ data, users, canEdit, reload, say }) {
           <div className="head">
             <h2>How the team is doing</h2>
             <div className="seg" role="group" aria-label="Period">
-              <button aria-pressed={period === "week"} onClick={() => setPeriod("week")}>This week</button>
-              <button aria-pressed={period === "month"} onClick={() => setPeriod("month")}>This month</button>
+              {PERIODS.map(([k, label]) => (
+              <button key={k} aria-pressed={period === k} onClick={() => setPeriod(k)}>{label}</button>
+            ))}
             </div>
           </div>
+          <p className="muted small">{period === "today" || period === "yesterday" ? fmtDay(day) : `${fmtDay(from)} to ${fmtDay(t)}`}</p>
           <div className="stats four">
             <div className="stat"><b>{total.visits}</b><span>Visits</span></div>
             <div className="stat"><b>{total.orders}</b><span>Orders ({total.visits ? pct(total.orders / total.visits) : "0%"} of visits)</span></div>
@@ -310,7 +316,7 @@ function Insights({ data, users, canEdit, reload, say }) {
         <div className="card">
           <div>
             <h2>People</h2>
-            <p className="muted small">Sorted with whoever needs your attention first. Target is {data.settings.dailyVisits} visits a day; Saturday is not counted.</p>
+            <p className="muted small">{PERIODS.find(([k]) => k === period)[1]}. Sorted with whoever needs your attention first. Target is {data.settings.dailyVisits} visits a day; Saturday is not counted.</p>
           </div>
           {sorted.map((r) => (
             <div key={r.email} className="coach">
@@ -320,7 +326,7 @@ function Insights({ data, users, canEdit, reload, say }) {
               </div>
               <div className="mini">
                 <div><b>{r.today}</b><span>Visits today</span></div>
-                <div><b>{r.visits}</b><span>Visits</span></div>
+                <div><b>{r.visits}</b><span>{period === "today" ? "Visits" : period === "yesterday" ? "Visits yesterday" : "Visits in period"}</span></div>
                 <div><b>{r.perDay.toFixed(1)}</b><span>Per field day</span></div>
                 <div><b>{r.orders}</b><span>Orders ({pct(r.rate)})</span></div>
                 <div><b>{money(r.value)}</b><span>Order value</span></div>
@@ -349,12 +355,17 @@ function Insights({ data, users, canEdit, reload, say }) {
             <h2>Money to collect</h2>
             <p className="muted small">Cheques not yet cleared and payments promised for a date. A line drops off by itself when the CRM invoice balance reaches zero.</p>
           </div>
+          <div className="seg" role="group" aria-label="Which payments">
+            {[["all", "All"], ["today", "Due today"], ["late", "Late"]].map(([k, label]) => (
+              <button key={k} aria-pressed={dueView === k} onClick={() => setDueView(k)}>{label}</button>
+            ))}
+          </div>
           <div className="stats four">
             <div className="stat hot"><b>{money(owed)}</b><span>Outstanding</span></div>
             <div className="stat"><b style={{ color: owedLate ? "var(--bad)" : undefined }}>{money(owedLate)}</b><span>Past its date</span></div>
           </div>
           <div className="rows">
-            {dues.map((d) => (
+            {shownDues.map((d) => (
               <div key={d.shop.id + d.visitId} className="row plain">
                 <span className="what">
                   <b>{d.shop.name}</b>
@@ -368,7 +379,7 @@ function Insights({ data, users, canEdit, reload, say }) {
                 <span className={"pill " + (d.late > 0 ? "o-no" : d.late >= -7 ? "o-interested" : "stage")}>{money(d.amount)}</span>
               </div>
             ))}
-            {!dues.length && <p className="muted">Nobody owes anything from field orders.</p>}
+            {!shownDues.length && <p className="muted">{dues.length ? "Nothing in this list." : "Nobody owes anything from field orders."}</p>}
           </div>
         </div>
       </section>
@@ -836,7 +847,18 @@ function ExportTab(ctx) {
         </div>
         <div className="card">
           <h3>Preview</h3>
-          <div className="tablewrap">
+          <div className="rows onlyPhone">
+            {rows.slice(0, 100).map((r, i) => (
+              <div key={i} className="row plain">
+                <span className="what">
+                  <b>{r.shop}</b>
+                  <small>{r.date} · {r.time} · {r.person} · {r.outcome}{r.area ? " · " + r.area : ""}</small>
+                </span>
+                <span className="pill stage">{r.value ? money(r.value) : r.points + " pts"}</span>
+              </div>
+            ))}
+          </div>
+          <div className="tablewrap onlyWide">
             <table>
               <thead>
                 <tr><th>Date</th><th>Time</th><th>Person</th><th>Shop</th><th>Area</th><th>Outcome</th><th className="num">Order</th><th className="num">Pts</th></tr>

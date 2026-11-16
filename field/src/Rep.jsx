@@ -1,11 +1,11 @@
 // The field user's screen: start the day, check in at shops, see today's race.
 import { useEffect, useMemo, useState } from "react";
-import { Camera, ChevronRight, MapPin, Play, Search, Square } from "lucide-react";
+import { Camera, ChevronRight, ListChecks, MapPin, Play, Search, Square, Trophy } from "lucide-react";
 import { api } from "./api.js";
 import { submit, flush, discard } from "./outbox.js";
 import { getPosition, shrinkPhoto } from "./geo.js";
 import MapView from "./MapView.jsx";
-import { Board, VisitRow, VisitFacts, FocusList, firstName } from "./ui.jsx";
+import { Board, VisitRow, VisitFacts, FocusList, firstName, PERIODS } from "./ui.jsx";
 import { buildMapData, indexBy } from "./mapdata.js";
 import { isAndroidApp, startTracking, stopTracking } from "./tracking.js";
 import { OUTCOMES, distanceMeters, visitPoints, focusList, findDuplicate, phoneKey, orderTotals, shopOwes, money } from "../shared/rules.js";
@@ -26,6 +26,7 @@ export default function Rep({ data, reload, say, waiting = [] }) {
   const [period, setPeriod] = useState("today");
   const [view, setView] = useState("focus");
   const [shopQ, setShopQ] = useState("");
+  const [tab, setTab] = useState("today"); // phones show one of three screens; wide screens show all
 
   // Android app only: share location all the time between Start day and End day.
   useEffect(() => {
@@ -417,11 +418,16 @@ export default function Rep({ data, reload, say, waiting = [] }) {
     .filter((s) => s.active !== false && s.owner === me.email)
     .filter((s) => !shopQ.trim() || (s.name + " " + (s.area || "")).toLowerCase().includes(shopQ.trim().toLowerCase()))
     .sort((a, b) => (stageRank[a.stage] ?? 3) - (stageRank[b.stage] ?? 3) || (a.lastVisit || "").localeCompare(b.lastVisit || ""));
+  const go = (k) => {
+    setTab(k);
+    window.scrollTo(0, 0);
+  };
   return (
-    <main className="shell">
+    <>
+    <main className="shell hasnav" data-tab={tab}>
       {map}
       <section className="panel">
-        <div className="card">
+        <div className="card t-today">
           <div>
             <p className="eyebrow">{started ? `Day started at ${day.start}` : day && day.end ? `Day ended at ${day.end}` : "Day not started"}</p>
             <h2>{started ? `${firstName(me)}, you are in the field` : `${firstName(me)}, ready to go?`}</h2>
@@ -450,7 +456,7 @@ export default function Rep({ data, reload, say, waiting = [] }) {
         </div>
 
         {chosen && (
-          <div className="card">
+          <div className="card t-today">
             <div className="head">
               <h2>{(shops[chosen.shopId] && shops[chosen.shopId].name) || chosen.shopName}</h2>
               <button className="btn small" onClick={() => setSel(null)}>Close</button>
@@ -460,7 +466,7 @@ export default function Rep({ data, reload, say, waiting = [] }) {
         )}
 
         {waiting.length > 0 && (
-          <div className="card waitcard">
+          <div className="card waitcard t-today">
             <div className="head">
               <h2>Waiting to send ({waiting.length})</h2>
               <button className="btn small" disabled={busy === "send"} onClick={async () => { setBusy("send"); const n = await flush(me.email).catch(() => 0); await reload(); setBusy(""); say(n ? `${n} sent.` : "Still no signal. It will send by itself."); }}>
@@ -481,7 +487,7 @@ export default function Rep({ data, reload, say, waiting = [] }) {
             </div>
           </div>
         )}
-        <div className="card">
+        <div className="card t-todo">
           <div className="head">
             <h2>{view === "focus" ? "Your focus list" : `My shops (${myShops.length})`}</h2>
             <div className="seg" role="group" aria-label="List">
@@ -539,7 +545,7 @@ export default function Rep({ data, reload, say, waiting = [] }) {
           )}
         </div>
 
-        <div className="card">
+        <div className="card t-today">
           <h3>Today</h3>
           <div className="rows">
             {todays.length ? (
@@ -550,24 +556,33 @@ export default function Rep({ data, reload, say, waiting = [] }) {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card t-race">
           <div className="head">
             <h3>The race</h3>
             <div className="seg" role="group" aria-label="Leaderboard period">
-              {[["today", "Today"], ["week", "Week"], ["month", "Month"]].map(([k, label]) => (
+              {PERIODS.map(([k, label]) => (
                 <button key={k} aria-pressed={period === k} onClick={() => setPeriod(k)}>{label}</button>
               ))}
             </div>
           </div>
-          <Board rows={data.board[period]} />
+          <Board rows={data.board[period] || []} />
         </div>
 
         {started && (
-          <button className="link" onClick={() => dayAction("end")} disabled={!!busy}>
+          <button className="link t-today" onClick={() => dayAction("end")} disabled={!!busy}>
             <Square size={14} /> {busy === "end" ? "Finding your location…" : "End day"}
           </button>
         )}
       </section>
     </main>
+    <nav className="appnav repnav" aria-label="Sections">
+      <button aria-current={tab === "today" ? "page" : undefined} onClick={() => go("today")}><MapPin size={20} /><span>Today</span></button>
+      <button aria-current={tab === "todo" ? "page" : undefined} onClick={() => go("todo")}>
+        <ListChecks size={20} /><span>To-do</span>
+        {urgent.length > 0 && <em>{urgent.length}</em>}
+      </button>
+      <button aria-current={tab === "race" ? "page" : undefined} onClick={() => go("race")}><Trophy size={20} /><span>Race</span></button>
+    </nav>
+    </>
   );
 }

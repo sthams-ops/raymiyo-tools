@@ -347,13 +347,16 @@ export function Toast({ text }) {
   );
 }
 
+// Every report can be cut to one day or a longer stretch.
+export const PERIODS = [["today", "Today"], ["yesterday", "Yesterday"], ["week", "Week"], ["month", "Month"]];
+
 // The clover mark with the app name. One place, so the brand looks the same everywhere.
 export function Brand() {
   return (
     <div className="brand">
       <img src="/brand/raymiyo-mark.png" alt="" width="38" height="38" />
       <span>
-        <b>Raymiyo Field</b>
+        <b><span className="long">Raymiyo </span>Field</b>
         <small>Kathmandu direct sales</small>
       </span>
     </div>

@@ -207,7 +207,8 @@ export function workingDays(from, to) {
 
 // One line per field user for the admin: the numbers and what needs a push.
 //   rows: scoreboard rows for the period. focus: focusList for all shops.
-export function coach(rows, focus, { from, today, dailyVisits, todayRows = [], nowTime = "" }) {
+//   live: the period includes today, which is still running. False for a finished day such as yesterday.
+export function coach(rows, focus, { from, today, dailyVisits, todayRows = [], nowTime = "", live = true }) {
   const due = workingDays(from, today);
   const team = rows.reduce((a, r) => ({ visits: a.visits + r.visits, orders: a.orders + r.orders }), { visits: 0, orders: 0 });
   const teamRate = team.visits ? team.orders / team.visits : 0;
@@ -218,11 +219,12 @@ export function coach(rows, focus, { from, today, dailyVisits, todayRows = [], n
     const rate = r.visits ? r.orders / r.visits : 0;
     const now = todayRows.find((t) => t.email === r.email) || { visits: 0 };
     const flags = [];
-    if (nowTime >= "11:30" && new Date(today + "T00:00:00Z").getUTCDay() !== 6 && now.visits === 0) flags.push("No check-in yet today");
-    if (r.days < due - (now.visits === 0 ? 1 : 0)) flags.push(`In the field ${r.days} of ${plural(due, "working day")}`);
+    if (live && nowTime >= "11:30" && new Date(today + "T00:00:00Z").getUTCDay() !== 6 && now.visits === 0) flags.push("No check-in yet today");
+    if (r.days < due - (live && now.visits === 0 ? 1 : 0)) flags.push(`In the field ${r.days} of ${plural(due, "working day")}`);
     // Today is still running, so judge the pace on finished days only.
-    const doneDays = r.days - (now.visits > 0 ? 1 : 0);
-    const donePace = doneDays > 0 ? (r.visits - now.visits) / doneDays : null;
+    const running = live ? now.visits : 0;
+    const doneDays = r.days - (running > 0 ? 1 : 0);
+    const donePace = doneDays > 0 ? (r.visits - running) / doneDays : null;
     if (donePace != null && donePace < dailyVisits * 0.7) flags.push(`Only ${donePace.toFixed(1)} visits a day, target is ${dailyVisits}`);
     if (overdue >= 3) flags.push(`${plural(overdue, "follow-up")} overdue`);
     if (r.visits >= 10 && teamRate > 0 && rate < teamRate * 0.5) flags.push(`Few orders: ${Math.round(rate * 100)}% of visits, team is ${Math.round(teamRate * 100)}%`);
