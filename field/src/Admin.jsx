@@ -1,7 +1,7 @@
 // The admin screen. The "view only" admin sees the same screens with every
 // change control removed; the server also refuses changes from that account.
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileText, Gauge, MapPinned, Search, Settings as Cog, Store, Trash2, Users } from "lucide-react";
+import { Download, FileText, Gauge, MapPinned, Rocket, Search, Settings as Cog, Store, Trash2, Users } from "lucide-react";
 import { api } from "./api.js";
 import MapView from "./MapView.jsx";
 import { Avatar, Board, VisitRow, VisitFacts, FocusList, fmtDay, PERIODS } from "./ui.jsx";
@@ -42,6 +42,7 @@ export default function Admin({ data, reload, setRange, say }) {
           </button>
         ))}
       </nav>
+      {!data.launch && <GoLive data={data} reload={reload} say={say} />}
       {!canEdit && <p className="banner">View only. You can see everything; changes are switched off for this account.</p>}
       {tab === "live" && <Live {...ctx} />}
       {tab === "insights" && <Insights {...ctx} />}
@@ -50,6 +51,46 @@ export default function Admin({ data, reload, setRange, say }) {
       {tab === "settings" && <SettingsTab {...ctx} />}
       {tab === "export" && <ExportTab {...ctx} />}
     </>
+  );
+}
+
+/* ---------- before the real first day ---------- */
+// Shown until the owner starts field sales. One tap, one time: it clears what was made while testing.
+function GoLive({ data, reload, say }) {
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const isOwner = data.me.email === data.owner;
+  async function start() {
+    setBusy(true);
+    setErr("");
+    try {
+      const out = await api.admin("goLive", { confirm: "START" });
+      await reload();
+      say(`Field sales has started. ${out.shops} test shops and ${out.visits} test check-ins were cleared.`);
+    } catch (e) {
+      setErr(e.message);
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="golive" role="region" aria-label="Start field sales">
+      <div>
+        <b>Testing mode</b>
+        <p>Everything saved now is practice. {isOwner ? "When the team is ready for the real first day, start field sales." : "The owner starts field sales when the team is ready."}</p>
+      </div>
+      {isOwner && !ask && <button className="btn solid" onClick={() => setAsk(true)}><Rocket size={16} /> Start field sales</button>}
+      {isOwner && ask && (
+        <div className="warnbox">
+          <p>This deletes all {data.shops.length} test shops, every test check-in, route and photo, and sets points back to zero. Your team, settings and product list stay. It cannot be undone and the button goes away afterwards.</p>
+          {err && <p className="error">{err}</p>}
+          <div className="chips">
+            <button className="btn solid" disabled={busy} onClick={start}>{busy ? "Clearing…" : "Yes, clear the tests and start"}</button>
+            <button className="btn" disabled={busy} onClick={() => setAsk(false)}>Not yet</button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

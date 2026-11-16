@@ -265,4 +265,17 @@ ok(r.code === 200 && r.data.visits.length === 1 && !("me" in r.data), "TV feed w
   ok(future.code === 200 && future.data.visit.date === nepal().date, "a time in the future is ignored");
 }
 
+// the real first day: one tap clears the tests, once
+{
+  ok((await call("state", { as: "mijesh" })).data.launch === null, "before the start the app is in testing mode");
+  ok((await call("admin", { as: "sajina", method: "POST", body: { op: "goLive", confirm: "START" } })).code === 403, "a field user cannot start field sales");
+  ok((await call("admin", { as: "mijesh", method: "POST", body: { op: "goLive" } })).code === 400, "starting needs the confirm step");
+  const go = await call("admin", { as: "mijesh", method: "POST", body: { op: "goLive", confirm: "START" } });
+  const after = (await call("state", { as: "mijesh" })).data;
+  ok(go.code === 200 && go.data.visits > 0 && after.shops.length === 0 && after.visits.length === 0, "starting clears every test shop and check-in");
+  ok(after.board.month.every((r) => r.points === 0) && Object.keys(after.days).length === 0, "points and the day are back to zero");
+  ok(after.launch && after.launch.date === nepal().date && after.users.length >= 3, "the team stays, and the start date is kept");
+  ok((await call("admin", { as: "mijesh", method: "POST", body: { op: "goLive", confirm: "START" } })).code === 400, "it cannot be started twice");
+}
+
 console.log(`All ${passed} checks passed.`);

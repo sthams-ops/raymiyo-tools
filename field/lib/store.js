@@ -59,6 +59,16 @@ export const store = {
     else if (rest) await rest.del(key);
     else mem.kv.delete(key);
   },
+  // Removes a key of either kind (single value or group).
+  async wipe(key) {
+    ensure();
+    if (tcp) await tcp.del(key);
+    else if (rest) await rest.del(key);
+    else {
+      mem.kv.delete(key);
+      mem.hash.delete(key);
+    }
+  },
   // Whole hash as a plain object of parsed values.
   async hall(key) {
     ensure();

@@ -21,6 +21,7 @@ export default async function handler(req, res) {
 
     await settle().catch(() => {});
     const products = await loadProducts().catch(() => ({ list: [], at: 0 }));
+    const launch = await store.get("field:launch");
     const [users, settings, shops, days] = await Promise.all([
       loadUsers(),
       loadSettings(),
@@ -48,6 +49,7 @@ export default async function handler(req, res) {
     res.json({
       me: publicUser(me),
       today,
+      launch: launch ? { date: launch.date } : null,
       from,
       to,
       settings,

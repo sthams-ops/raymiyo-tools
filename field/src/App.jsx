@@ -170,6 +170,7 @@ function Signed() {
           {mine.length > 0 ? `${mine.length} ${mine.length === 1 ? "item is" : "items are"} saved on this phone and will send when the signal is back.` : offline ? "You can keep working. Check-ins are saved on this phone." : ""}
         </p>
       )}
+      {!data.launch && (me.role === "rep" || tryField) && <p className="banner">Practice mode. Check-ins saved now are for learning and will be cleared before the real first day.</p>}
       {me.role === "rep" || (me.role === "admin" && tryField) ? <Rep data={view} reload={sync} say={say} waiting={mine} /> : <Admin data={data} reload={reload} setRange={setRange} say={say} />}
       <Toast text={toast} />
     </>
