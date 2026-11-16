@@ -1,504 +1,502 @@
-// Zoho CRM function: field_shop_visit
-// Called by the Raymiyo Field app each time a check-in is saved, corrected or deleted.
-// It finds (or creates) the shop as an Account under "Kathmandu Raymiyo Trading Pvt Ltd",
-// updates the shop's stage and last contact date, and saves the Shop Visit record.
-//
-// Set up as a Standalone function with ONE argument:   crmAPIRequest   (type: String)
-// Return type: String. Then switch on REST API -> API Key for it.
-
-KTM_PARENT = "6482577000019816015";
-// CRM users by app email, so each visit is owned by the person who made it.
-// Add a line here when a new field user joins.
-owners = Map();
-owners.put("mijesh.shrestha@unijoynepal.com","6482577000000486001");
-owners.put("bivek.maharjan@unijoynepal.com","6482577000000992005");
-owners.put("divash.shilpakar@unijoynepal.com","6482577000000992025");
-owners.put("sajina@unijoynepal.com","6482577000008914001");
-
-outcomes = Map();
-outcomes.put("order","Order taken");
-outcomes.put("interested","Interested");
-outcomes.put("no","Not interested");
-outcomes.put("absent","Owner absent");
-
-out = Map();
-try
+string standalone.field_shop_visit(string crmAPIRequest)
 {
-	req = crmAPIRequest.toMap();
-	p = req.get("params").get("payload").toMap();
-	action = ifnull(p.get("action"),"save");
-
-	// ---- The app asks for the product list ----
-	if(action == "products")
+	KTM_PARENT = "6482577000019816015";
+	// CRM users by app email, so each visit is owned by the person who made it.
+	// Add a line here when a new field user joins.
+	owners = Map();
+	owners.put("mijesh.shrestha@unijoynepal.com","6482577000000486001");
+	owners.put("bivek.maharjan@unijoynepal.com","6482577000000992005");
+	owners.put("divash.shilpakar@unijoynepal.com","6482577000000992025");
+	owners.put("sajina@unijoynepal.com","6482577000008914001");
+	outcomes = Map();
+	outcomes.put("order","Order taken");
+	outcomes.put("interested","Interested");
+	outcomes.put("no","Not interested");
+	outcomes.put("absent","Owner absent");
+	out = Map();
+	try
 	{
-		plist = List();
-		rows = zoho.crm.getRecords("Products",1,200);
-		for each  pr in rows
+		req = crmAPIRequest.toMap();
+		p = req.get("params").get("payload").toMap();
+		action = ifnull(p.get("action"),"save");
+		// ---- The app asks for the product list ----
+		if(action == "products")
 		{
-			price = ifnull(pr.get("Unit_Price"),0);
-			if(pr.get("Product_Active") == true && price > 0)
+			prodList = List();
+			prodRows = zoho.crm.getRecords("Products",1,200);
+			for each  prodRec in prodRows
 			{
-				one = Map();
-				one.put("id",pr.get("id").toString());
-				one.put("name",pr.get("Product_Name"));
-				one.put("code",ifnull(pr.get("Product_Code"),""));
-				one.put("category",ifnull(pr.get("Product_Category"),"Other"));
-				one.put("unit",ifnull(pr.get("Usage_Unit"),""));
-				one.put("price",price);
-				plist.add(one);
-			}
-		}
-		out.put("products",plist);
-		return out.toString();
-	}
-
-	// ---- The app asks what is still unpaid on some orders ----
-	if(action == "balances")
-	{
-		bal = Map();
-		for each  sid in ifnull(p.get("so_ids"),"").toString().toList(",")
-		{
-			if(sid != "")
-			{
-				try
+				unitPrice = ifnull(prodRec.get("Unit_Price"),0);
+				if(prodRec.get("Product_Active") == true && unitPrice > 0)
 				{
-					invs = zoho.crm.searchRecords("Invoices","(Sales_Order:equals:" + sid + ")");
-					if(invs.size() > 0)
-					{
-						bal.put(sid,ifnull(invs.get(0).get("Balance"),0));
-					}
-				}
-				catch (e5)
-				{
+					prodMap = Map();
+					prodMap.put("id",prodRec.get("id").toString());
+					prodMap.put("name",prodRec.get("Product_Name"));
+					prodMap.put("code",ifnull(prodRec.get("Product_Code"),""));
+					prodMap.put("category",ifnull(prodRec.get("Product_Category"),"Other"));
+					prodMap.put("unit",ifnull(prodRec.get("Usage_Unit"),""));
+					prodMap.put("price",unitPrice);
+					prodList.add(prodMap);
 				}
 			}
-		}
-		out.put("balances",bal);
-		return out.toString();
-	}
-
-	// ---- Cash or a cheque was collected: put it on the order's Invoice ----
-	if(action == "collect")
-	{
-		soId = ifnull(p.get("crm_so_id"),"").toString();
-		invs = zoho.crm.searchRecords("Invoices","(Sales_Order:equals:" + soId + ")");
-		if(soId == "" || invs.size() == 0)
-		{
-			out.put("waiting",true);
+			out.put("products",prodList);
 			return out.toString();
 		}
-		invId = invs.get(0).get("id").toString();
-		inv = zoho.crm.getRecordById("Invoices",invId.toLong());
-		upd = Map();
-		if(p.get("pay_type") == "Cheque")
+		// ---- The app asks what is still unpaid on some orders ----
+		if(action == "balances")
 		{
-			cd = p.get("cheque_date").toString();
-			d1 = ifnull(inv.get("PDC_Date"),"").toString();
-			d2 = ifnull(inv.get("PDC2_Date"),"").toString();
-			if(d1 == "" || d1 == cd)
+			balMap = Map();
+			soIdText = ifnull(p.get("so_ids"),"").toString();
+			soIdList = soIdText.toList(",");
+			for each  soKey in soIdList
 			{
-				upd.put("PDC_Date",cd);
-				upd.put("PDC_Status","Received");
-			}
-			else if(d2 == "" || d2 == cd)
-			{
-				upd.put("PDC2_Date",cd);
-				upd.put("PDC2_Status","Received");
-			}
-			else
-			{
-				out.put("error","This invoice already has two cheques in CRM. Add this one by hand.");
-				return out.toString();
-			}
-			saved = zoho.crm.updateRecord("Invoices",invId.toLong(),upd);
-			photoUrl = ifnull(p.get("cheque_photo"),"").toString();
-			if(photoUrl != "" && d1 != cd && d2 != cd)
-			{
-				try
+				if(soKey != "")
 				{
-					note = Map();
-					note.put("Note_Title","Cheque photo " + cd);
-					note.put("Note_Content",photoUrl);
-					note.put("Parent_Id",invId);
-					note.put("se_module","Invoices");
-					noteSaved = zoho.crm.createRecord("Notes",note);
-				}
-				catch (e6)
-				{
-				}
-			}
-		}
-		else
-		{
-			rowsNow = List();
-			already = false;
-			mark = "Field app " + ifnull(p.get("visit_id"),"");
-			for each  ph in ifnull(inv.get("Payment_History"),List())
-			{
-				keep = Map();
-				keep.put("id",ph.get("id"));
-				rowsNow.add(keep);
-				if(ifnull(ph.get("Remarks"),"").contains(mark))
-				{
-					already = true;
-				}
-			}
-			if(!already)
-			{
-				row = Map();
-				row.put("Paid_Date",p.get("pay_on"));
-				row.put("Paid_Amount",p.get("pay_amount"));
-				row.put("Payment_Method","Cash");
-				row.put("Remarks","Cash collected at the shop. " + mark);
-				rowsNow.add(row);
-				upd.put("Payment_History",rowsNow);
-				saved = zoho.crm.updateRecord("Invoices",invId.toLong(),upd);
-			}
-			else
-			{
-				saved = {"id":invId};
-			}
-		}
-		if(saved.get("id") == null)
-		{
-			out.put("error","Could not update the invoice: " + saved.toString());
-		}
-		out.put("invoice_id",invId);
-		return out.toString();
-	}
-
-	visitKey = ifnull(p.get("visit_id"),"");
-	if(visitKey == "")
-	{
-		out.put("error","No visit id was sent.");
-		return out.toString();
-	}
-
-	// ---- Is this check-in already in CRM? ----
-	visitId = ifnull(p.get("crm_visit_id"),"");
-	if(visitId == "")
-	{
-		try
-		{
-			old = zoho.crm.searchRecords("Shop_Visits","(Visit_ID:equals:" + visitKey + ")");
-			if(old.size() > 0)
-			{
-				visitId = old.get(0).get("id").toString();
-			}
-		}
-		catch (e1)
-		{
-		}
-	}
-	accId = ifnull(p.get("crm_account_id"),"");
-	stage = ifnull(p.get("shop_stage"),"");
-
-	// ---- The follow-up was ticked off in the app ----
-	if(action == "done")
-	{
-		if(visitId != "")
-		{
-			zoho.crm.updateRecord("Shop_Visits",visitId.toLong(),{"Follow_up_Done":true});
-		}
-		out.put("visit_id",visitId);
-		return out.toString();
-	}
-
-	// ---- An admin deleted the check-in in the app ----
-	if(action == "cancel")
-	{
-		if(visitId != "")
-		{
-			c = Map();
-			c.put("Cancelled",true);
-			c.put("Order_Value",0);
-			c.put("Points",0);
-			c.put("Next_Step","No action");
-			c.put("Follow_up_Done",true);
-			zoho.crm.updateRecord("Shop_Visits",visitId.toLong(),c);
-		}
-		if(accId != "" && stage != "")
-		{
-			zoho.crm.updateRecord("Accounts",accId.toLong(),{"Shop_Stage":stage});
-		}
-		out.put("visit_id",visitId);
-		out.put("account_id",accId);
-		return out.toString();
-	}
-
-	shopName = ifnull(p.get("shop_name"),"Shop");
-	visitDate = p.get("date");
-	repEmail = ifnull(p.get("rep_email"),"");
-	ownerId = owners.get(repEmail);
-	shopType = if(p.get("shop_type") == "Wholesaler","Wholeseller","Retailer");
-	// Phone: the app sends digits only. CRM keeps mobiles as "+977 98XXXXXXXX".
-	phoneRaw = ifnull(p.get("shop_phone"),"").toString();
-	phone = phoneRaw;
-	if(phoneRaw.length() == 10 && phoneRaw.startsWith("9"))
-	{
-		phone = "+977 " + phoneRaw;
-	}
-
-	// ---- Find the shop's Account, or create it ----
-	if(accId == "" && !shopName.contains("(") && !shopName.contains(")") && !shopName.contains(","))
-	{
-		try
-		{
-			found = zoho.crm.searchRecords("Accounts","(Account_Name:equals:" + shopName + ")");
-			for each  a in found
-			{
-				par = a.get("Parent_Account");
-				if(accId == "" && par != null && par.get("id").toString() == KTM_PARENT)
-				{
-					accId = a.get("id").toString();
-				}
-			}
-		}
-		catch (e2)
-		{
-		}
-	}
-	// ---- Same phone number already in Accounts? Then it is the same shop. ----
-	if(accId == "" && phoneRaw.length() >= 7)
-	{
-		tries = List();
-		tries.add(phone);
-		tries.add(phoneRaw);
-		for each  t in tries
-		{
-			if(accId == "")
-			{
-				try
-				{
-					hits = zoho.crm.searchRecords("Accounts","(Phone:equals:" + t + ")");
-					for each  h in hits
+					try
 					{
-						hp = ifnull(h.get("Phone"),"").toString().replaceAll("[^0-9]","");
-						if(accId == "" && hp.endsWith(phoneRaw))
+						invs = zoho.crm.searchRecords("Invoices","(Sales_Order:equals:" + soKey + ")");
+						if(invs.size() > 0)
 						{
-							accId = h.get("id").toString();
+							balMap.put(soKey,ifnull(invs.get(0).get("Balance"),0));
 						}
 					}
-				}
-				catch (e3)
-				{
+					catch (e5)
+					{
+					}
 				}
 			}
-		}
-	}
-	if(accId == "")
-	{
-		acc = Map();
-		acc.put("Account_Name",shopName);
-		acc.put("Parent_Account",KTM_PARENT);
-		acc.put("Account_Type",shopType);
-		acc.put("Scope","B2B");
-		acc.put("Area","Kathmandu");
-		acc.put("Billing_City","Kathmandu");
-		acc.put("Billing_Street",ifnull(p.get("shop_area"),""));
-		acc.put("Active",true);
-		if(phone != "")
-		{
-			acc.put("Phone",phone);
-		}
-		if(stage != "")
-		{
-			acc.put("Shop_Stage",stage);
-		}
-		if(ownerId != null)
-		{
-			acc.put("Owner",ownerId);
-		}
-		acc.put("Description","Added from the Raymiyo Field app by " + ifnull(p.get("rep_name"),repEmail) + " on " + visitDate + ".");
-		made = zoho.crm.createRecord("Accounts",acc);
-		if(made.get("id") != null)
-		{
-			accId = made.get("id").toString();
-		}
-		else if(made.get("code") == "DUPLICATE_DATA" && made.get("details") != null && made.get("details").get("id") != null)
-		{
-			accId = made.get("details").get("id").toString();
-		}
-		else
-		{
-			out.put("error","Could not create the shop in Accounts: " + made.toString());
+			out.put("balances",balMap);
 			return out.toString();
 		}
-	}
-
-	// ---- Keep the shop's Account up to date ----
-	accUpd = Map();
-	accUpd.put("Last_Contact_Date",visitDate);
-	if(stage != "")
-	{
-		accUpd.put("Shop_Stage",stage);
-	}
-	terms = ifnull(p.get("payment_terms"),"");
-	if(p.get("outcome") == "order" && terms != "")
-	{
-		accUpd.put("Payment_Terms",terms);
-	}
-	zoho.crm.updateRecord("Accounts",accId.toLong(),accUpd);
-
-	// ---- An order with products becomes a Sales Order, once ----
-	soId = ifnull(p.get("crm_so_id"),"").toString();
-	items = ifnull(p.get("items"),List());
-	if(soId == "" && p.get("outcome") == "order" && items.size() > 0)
-	{
-		so = Map();
-		so.put("Subject","Goods sold to " + shopName);
-		so.put("Account_Name",accId);
-		so.put("Sales_Order_Type","B2B");
-		so.put("Status","Created");
-		so.put("Discount",ifnull(p.get("discount"),0));
-		so.put("Billing_City","Kathmandu");
-		so.put("Billing_Street",ifnull(p.get("shop_area"),""));
-		so.put("Billing_Country","Nepal");
-		so.put("Description","From the Raymiyo Field app. Check-in " + visitKey + " by " + ifnull(p.get("rep_name"),repEmail) + ". Shop margin " + ifnull(p.get("margin"),0) + "%.");
-		if(ownerId != null)
+		// ---- Cash or a cheque was collected: put it on the order's Invoice ----
+		if(action == "collect")
 		{
-			so.put("Owner",ownerId);
-		}
-		linesA = List();
-		linesB = List();
-		for each  it in items
-		{
-			la = Map();
-			la.put("Product_Name",it.get("id").toString());
-			la.put("Quantity",it.get("qty"));
-			la.put("List_Price",it.get("price"));
-			linesA.add(la);
-			lb = Map();
-			lb.put("product",it.get("id").toString());
-			lb.put("quantity",it.get("qty"));
-			lb.put("list_price",it.get("price"));
-			linesB.add(lb);
-		}
-		so.put("Ordered_Items",linesA);
-		madeSo = zoho.crm.createRecord("Sales_Orders",so);
-		if(madeSo.get("id") == null)
-		{
-			so.remove("Ordered_Items");
-			so.put("Product_Details",linesB);
-			madeSo2 = zoho.crm.createRecord("Sales_Orders",so);
-			if(madeSo2.get("id") != null)
+			soId = ifnull(p.get("crm_so_id"),"").toString();
+			invs = zoho.crm.searchRecords("Invoices","(Sales_Order:equals:" + soId + ")");
+			if(soId == "" || invs.size() == 0)
 			{
-				madeSo = madeSo2;
+				out.put("waiting",true);
+				return out.toString();
 			}
+			inv = invs.get(0);
+			invId = inv.get("id").toString();
+			upd = Map();
+			if(p.get("pay_type") == "Cheque")
+			{
+				chequeDay = p.get("cheque_date").toString();
+				d1 = ifnull(inv.get("PDC_Date"),"").toString();
+				d2 = ifnull(inv.get("PDC2_Date"),"").toString();
+				if(d1 == "" || d1 == chequeDay)
+				{
+					upd.put("PDC_Date",chequeDay);
+					upd.put("PDC_Status","Received");
+				}
+				else if(d2 == "" || d2 == chequeDay)
+				{
+					upd.put("PDC2_Date",chequeDay);
+					upd.put("PDC2_Status","Received");
+				}
+				else
+				{
+					out.put("error","This invoice already has two cheques in CRM. Add this one by hand.");
+					return out.toString();
+				}
+				savedRec = zoho.crm.updateRecord("Invoices",invId.toLong(),upd);
+				photoUrl = ifnull(p.get("cheque_photo"),"").toString();
+				if(photoUrl != "" && d1 != chequeDay && d2 != chequeDay)
+				{
+					try
+					{
+						noteMap = Map();
+						noteMap.put("Note_Title","Cheque photo " + chequeDay);
+						noteMap.put("Note_Content",photoUrl);
+						noteMap.put("Parent_Id",invId);
+						noteMap.put("se_module","Invoices");
+						noteSaved = zoho.crm.createRecord("Notes",noteMap);
+					}
+					catch (e6)
+					{
+					}
+				}
+			}
+			else
+			{
+				rowsNow = List();
+				alreadyPaid = false;
+				payMark = "Field app " + ifnull(p.get("visit_id"),"").toString();
+				oldLines = inv.get("Payment_History");
+				if(oldLines == null)
+				{
+					oldLines = List();
+				}
+				for each  payLine in oldLines
+				{
+					keepRow = Map();
+					keepRow.put("id",payLine.get("id"));
+					rowsNow.add(keepRow);
+					if(ifnull(payLine.get("Remarks"),"").toString().contains(payMark))
+					{
+						alreadyPaid = true;
+					}
+				}
+				if(alreadyPaid == false)
+				{
+					payRow = Map();
+					payRow.put("Paid_Date",p.get("pay_on"));
+					payRow.put("Paid_Amount",p.get("pay_amount"));
+					payRow.put("Payment_Method","Cash");
+					payRow.put("Remarks","Cash collected at the shop. " + payMark);
+					rowsNow.add(payRow);
+					upd.put("Payment_History",rowsNow);
+					savedRec = zoho.crm.updateRecord("Invoices",invId.toLong(),upd);
+				}
+				else
+				{
+					savedRec = Map();
+					savedRec.put("id",invId);
+				}
+			}
+			if(savedRec.get("id") == null)
+			{
+				out.put("error","Could not update the invoice: " + savedRec.toString());
+			}
+			out.put("invoice_id",invId);
+			return out.toString();
 		}
-		if(madeSo.get("id") != null)
+		visitKey = ifnull(p.get("visit_id"),"");
+		if(visitKey == "")
 		{
-			soId = madeSo.get("id").toString();
+			out.put("error","No visit id was sent.");
+			return out.toString();
 		}
-		else
-		{
-			out.put("note","Sales Order not created: " + madeSo.toString());
-		}
-	}
-
-	// ---- Save the Shop Visit ----
-	outcomeLabel = ifnull(outcomes.get(p.get("outcome")),"Interested");
-	title = shopName;
-	if(title.length() > 118)
-	{
-		title = title.subString(0,118);
-	}
-	v = Map();
-	v.put("Name",title);
-	v.put("Shop",accId);
-	v.put("Shop_Phone",if(phone == "",null,phone));
-	v.put("Visit_Date",visitDate);
-	v.put("Visit_Time",ifnull(p.get("time"),""));
-	v.put("Outcome",outcomeLabel);
-	v.put("Order_Value",ifnull(p.get("order_value"),0));
-	v.put("Payment_Terms",if(terms == "",null,terms));
-	v.put("Next_Step",ifnull(p.get("next_step"),"No action"));
-	follow = ifnull(p.get("follow_up_date"),"");
-	v.put("Next_Follow_up_Date",if(follow == "",null,follow));
-	v.put("Visit_Notes",ifnull(p.get("note"),""));
-	v.put("Competitor_Brands",ifnull(p.get("brands"),""));
-	v.put("New_Shop",ifnull(p.get("new_shop"),false));
-	v.put("First_Order",ifnull(p.get("first_order"),false));
-	v.put("Shop_Stage_After_Visit",stage);
-	v.put("Shop_Type",ifnull(p.get("shop_type"),""));
-	v.put("Area",ifnull(p.get("shop_area"),""));
-	v.put("Points",ifnull(p.get("points"),0));
-	v.put("Away_From_Shop",ifnull(p.get("away_from_shop"),false));
-	v.put("Distance_From_Shop_m",ifnull(p.get("distance_m"),0));
-	v.put("Map_Link",ifnull(p.get("map_url"),""));
-	photo = ifnull(p.get("photo_url"),"");
-	if(photo != "")
-	{
-		v.put("Shelf_Photo",photo);
-	}
-	lat = ifnull(p.get("latitude"),"");
-	lng = ifnull(p.get("longitude"),"");
-	if(lat != "" && lng != "")
-	{
-		v.put("Latitude",lat.toString().toDecimal().round(6));
-		v.put("Longitude",lng.toString().toDecimal().round(6));
-	}
-	v.put("Visit_ID",visitKey);
-	v.put("Cancelled",false);
-	if(soId != "")
-	{
-		v.put("Sales_Order",soId);
-		out.put("so_id",soId);
-	}
-	v.put("Order_Items",ifnull(p.get("items_text"),""));
-	v.put("Shop_Margin",ifnull(p.get("margin"),0));
-	dOn = ifnull(p.get("delivered_on"),"");
-	v.put("Delivered_On",if(dOn == "",null,dOn));
-	pType = ifnull(p.get("pay_type"),"");
-	v.put("Payment_Type",if(pType == "",null,pType));
-	v.put("Amount_Collected",ifnull(p.get("pay_amount"),0));
-	cDate = ifnull(p.get("cheque_date"),"");
-	v.put("Cheque_Date",if(cDate == "",null,cDate));
-	cPhoto = ifnull(p.get("cheque_photo"),"");
-	v.put("Cheque_Photo",if(cPhoto == "",null,cPhoto));
-	pDue = ifnull(p.get("pay_due"),"");
-	v.put("Payment_Due_Date",if(pDue == "",null,pDue));
-	if(dOn != "")
-	{
-		v.put("Follow_up_Done",true);
-	}
-	if(ownerId != null)
-	{
-		v.put("Owner",ownerId);
-	}
-	if(visitId != "")
-	{
-		saved = zoho.crm.updateRecord("Shop_Visits",visitId.toLong(),v);
-	}
-	else
-	{
-		saved = zoho.crm.createRecord("Shop_Visits",v);
-	}
-	if(saved.get("id") != null)
-	{
-		out.put("visit_id",saved.get("id").toString());
-		out.put("account_id",accId);
-		// A new visit closes the follow-up the shop was waiting for.
-		doneId = ifnull(p.get("done_crm_visit_id"),"").toString();
-		if(doneId != "" && doneId != saved.get("id").toString())
+		// ---- Is this check-in already in CRM? ----
+		visitId = ifnull(p.get("crm_visit_id"),"");
+		if(visitId == "")
 		{
 			try
 			{
-				zoho.crm.updateRecord("Shop_Visits",doneId.toLong(),{"Follow_up_Done":true});
+				oldVisits = zoho.crm.searchRecords("Shop_Visits","(Visit_ID:equals:" + visitKey + ")");
+				if(oldVisits.size() > 0)
+				{
+					visitId = oldVisits.get(0).get("id").toString();
+				}
 			}
-			catch (e4)
+			catch (e1)
 			{
 			}
 		}
+		accId = ifnull(p.get("crm_account_id"),"");
+		stage = ifnull(p.get("shop_stage"),"");
+		// ---- The follow-up was ticked off in the app ----
+		if(action == "done")
+		{
+			if(visitId != "")
+			{
+				tickMap = Map();
+				tickMap.put("Follow_up_Done",true);
+				tickDone = zoho.crm.updateRecord("Shop_Visits",visitId.toLong(),tickMap);
+			}
+			out.put("visit_id",visitId);
+			return out.toString();
+		}
+		// ---- An admin deleted the check-in in the app ----
+		if(action == "cancel")
+		{
+			if(visitId != "")
+			{
+				cancelMap = Map();
+				cancelMap.put("Cancelled",true);
+				cancelMap.put("Order_Value",0);
+				cancelMap.put("Points",0);
+				cancelMap.put("Next_Step","No action");
+				cancelMap.put("Follow_up_Done",true);
+				updDone = zoho.crm.updateRecord("Shop_Visits",visitId.toLong(),cancelMap);
+			}
+			if(accId != "" && stage != "")
+			{
+				stageMap = Map();
+				stageMap.put("Shop_Stage",stage);
+				stageDone = zoho.crm.updateRecord("Accounts",accId.toLong(),stageMap);
+			}
+			out.put("visit_id",visitId);
+			out.put("account_id",accId);
+			return out.toString();
+		}
+		shopName = ifnull(p.get("shop_name"),"Shop");
+		visitDate = p.get("date");
+		repEmail = ifnull(p.get("rep_email"),"");
+		ownerId = owners.get(repEmail);
+		shopType = if(p.get("shop_type") == "Wholesaler","Wholeseller","Retailer");
+		// Phone: the app sends digits only. CRM keeps mobiles as "+977 98XXXXXXXX".
+		phoneRaw = ifnull(p.get("shop_phone"),"").toString();
+		phone = phoneRaw;
+		if(phoneRaw.length() == 10 && phoneRaw.startsWith("9"))
+		{
+			phone = "+977 " + phoneRaw;
+		}
+		// ---- Find the shop's Account, or create it ----
+		if(accId == "" && !shopName.contains("(") && !shopName.contains(")") && !shopName.contains(","))
+		{
+			try
+			{
+				foundAccs = zoho.crm.searchRecords("Accounts","(Account_Name:equals:" + shopName + ")");
+				for each  accRec in foundAccs
+				{
+					par = accRec.get("Parent_Account");
+					if(accId == "" && par != null && par.get("id").toString() == KTM_PARENT)
+					{
+						accId = accRec.get("id").toString();
+					}
+				}
+			}
+			catch (e2)
+			{
+			}
+		}
+		// ---- Same phone number already in Accounts? Then it is the same shop. ----
+		if(accId == "" && phoneRaw.length() >= 7)
+		{
+			phoneTries = List();
+			phoneTries.add(phone);
+			phoneTries.add(phoneRaw);
+			for each  tryPhone in phoneTries
+			{
+				if(accId == "")
+				{
+					try
+					{
+						phoneHits = zoho.crm.searchRecords("Accounts","(Phone:equals:" + tryPhone + ")");
+						for each  hitAcc in phoneHits
+						{
+							hitPhone = ifnull(hitAcc.get("Phone"),"").toString().replaceAll("[^0-9]","");
+							if(accId == "" && hitPhone.endsWith(phoneRaw))
+							{
+								accId = hitAcc.get("id").toString();
+							}
+						}
+					}
+					catch (e3)
+					{
+					}
+				}
+			}
+		}
+		if(accId == "")
+		{
+			acc = Map();
+			acc.put("Account_Name",shopName);
+			acc.put("Parent_Account",KTM_PARENT);
+			acc.put("Account_Type",shopType);
+			acc.put("Scope","B2B");
+			acc.put("Area","Kathmandu");
+			acc.put("Billing_City","Kathmandu");
+			acc.put("Billing_Street",ifnull(p.get("shop_area"),""));
+			acc.put("Active",true);
+			if(phone != "")
+			{
+				acc.put("Phone",phone);
+			}
+			if(stage != "")
+			{
+				acc.put("Shop_Stage",stage);
+			}
+			if(ownerId != null)
+			{
+				acc.put("Owner",ownerId);
+			}
+			acc.put("Description","Added from the Raymiyo Field app by " + ifnull(p.get("rep_name"),repEmail) + " on " + visitDate + ".");
+			madeAcc = zoho.crm.createRecord("Accounts",acc);
+			if(madeAcc.get("id") != null)
+			{
+				accId = madeAcc.get("id").toString();
+			}
+			else if(madeAcc.get("code") == "DUPLICATE_DATA" && madeAcc.get("details") != null && madeAcc.get("details").get("id") != null)
+			{
+				accId = madeAcc.get("details").get("id").toString();
+			}
+			else
+			{
+				out.put("error","Could not create the shop in Accounts: " + madeAcc.toString());
+				return out.toString();
+			}
+		}
+		// ---- Keep the shop's Account up to date ----
+		accUpd = Map();
+		accUpd.put("Last_Contact_Date",visitDate);
+		if(stage != "")
+		{
+			accUpd.put("Shop_Stage",stage);
+		}
+		terms = ifnull(p.get("payment_terms"),"");
+		if(p.get("outcome") == "order" && terms != "")
+		{
+			accUpd.put("Payment_Terms",terms);
+		}
+		updDone = zoho.crm.updateRecord("Accounts",accId.toLong(),accUpd);
+		// ---- An order with products becomes a Sales Order, once ----
+		soId = ifnull(p.get("crm_so_id"),"").toString();
+		orderItems = ifnull(p.get("items"),List());
+		if(soId == "" && p.get("outcome") == "order" && orderItems.size() > 0)
+		{
+			soMap = Map();
+			soMap.put("Subject","Goods sold to " + shopName);
+			soMap.put("Account_Name",accId);
+			soMap.put("Sales_Order_Type","B2B");
+			soMap.put("Status","Created");
+			soMap.put("Discount",ifnull(p.get("discount"),0));
+			soMap.put("Billing_City","Kathmandu");
+			soMap.put("Billing_Street",ifnull(p.get("shop_area"),""));
+			soMap.put("Billing_Country","Nepal");
+			soMap.put("Description","From the Raymiyo Field app. Check-in " + visitKey + " by " + ifnull(p.get("rep_name"),repEmail) + ". Shop margin " + ifnull(p.get("margin"),0) + "%.");
+			if(ownerId != null)
+			{
+				soMap.put("Owner",ownerId);
+			}
+			linesA = List();
+			linesB = List();
+			for each  lineItem in orderItems
+			{
+				lineA = Map();
+				lineA.put("Product_Name",lineItem.get("id").toString());
+				lineA.put("Quantity",lineItem.get("qty"));
+				lineA.put("List_Price",lineItem.get("price"));
+				linesA.add(lineA);
+				lineB = Map();
+				lineB.put("product",lineItem.get("id").toString());
+				lineB.put("quantity",lineItem.get("qty"));
+				lineB.put("list_price",lineItem.get("price"));
+				linesB.add(lineB);
+			}
+			soTryA = Map();
+			soTryA.putAll(soMap);
+			soTryA.put("Product_Details",linesB);
+			madeSo = zoho.crm.createRecord("Sales_Orders",soTryA);
+			if(madeSo.get("id") == null)
+			{
+				soTryB = Map();
+				soTryB.putAll(soMap);
+				soTryB.put("Ordered_Items",linesA);
+				madeSo2 = zoho.crm.createRecord("Sales_Orders",soTryB);
+				if(madeSo2.get("id") != null)
+				{
+					madeSo = madeSo2;
+				}
+			}
+			if(madeSo.get("id") != null)
+			{
+				soId = madeSo.get("id").toString();
+			}
+			else
+			{
+				out.put("note","Sales Order not created: " + madeSo.toString());
+			}
+		}
+		// ---- Save the Shop Visit ----
+		outcomeLabel = ifnull(outcomes.get(p.get("outcome")),"Interested");
+		title = shopName;
+		if(title.length() > 118)
+		{
+			title = title.subString(0,118);
+		}
+		v = Map();
+		v.put("Name",title);
+		v.put("Shop",accId);
+		v.put("Shop_Phone",if(phone == "",null,phone));
+		v.put("Visit_Date",visitDate);
+		v.put("Visit_Time",ifnull(p.get("time"),""));
+		v.put("Outcome",outcomeLabel);
+		v.put("Order_Value",ifnull(p.get("order_value"),0));
+		v.put("Payment_Terms",if(terms == "",null,terms));
+		v.put("Next_Step",ifnull(p.get("next_step"),"No action"));
+		follow = ifnull(p.get("follow_up_date"),"");
+		v.put("Next_Follow_up_Date",if(follow == "",null,follow));
+		v.put("Visit_Notes",ifnull(p.get("note"),""));
+		v.put("Competitor_Brands",ifnull(p.get("brands"),""));
+		v.put("New_Shop",ifnull(p.get("new_shop"),false));
+		v.put("First_Order",ifnull(p.get("first_order"),false));
+		v.put("Shop_Stage_After_Visit",stage);
+		v.put("Shop_Type",ifnull(p.get("shop_type"),""));
+		v.put("Area",ifnull(p.get("shop_area"),""));
+		v.put("Points",ifnull(p.get("points"),0));
+		v.put("Away_From_Shop",ifnull(p.get("away_from_shop"),false));
+		v.put("Distance_From_Shop_m",ifnull(p.get("distance_m"),0));
+		v.put("Map_Link",ifnull(p.get("map_url"),""));
+		photo = ifnull(p.get("photo_url"),"");
+		if(photo != "")
+		{
+			v.put("Shelf_Photo",photo);
+		}
+		lat = ifnull(p.get("latitude"),"");
+		lng = ifnull(p.get("longitude"),"");
+		if(lat != "" && lng != "")
+		{
+			v.put("Latitude",lat.toString().toDecimal().round(6));
+			v.put("Longitude",lng.toString().toDecimal().round(6));
+		}
+		v.put("Visit_ID",visitKey);
+		v.put("Cancelled",false);
+		if(soId != "")
+		{
+			v.put("Sales_Order",soId);
+			out.put("so_id",soId);
+		}
+		v.put("Order_Items",ifnull(p.get("items_text"),""));
+		v.put("Shop_Margin",ifnull(p.get("margin"),0));
+		dOn = ifnull(p.get("delivered_on"),"");
+		v.put("Delivered_On",if(dOn == "",null,dOn));
+		pType = ifnull(p.get("pay_type"),"");
+		v.put("Payment_Type",if(pType == "",null,pType));
+		v.put("Amount_Collected",ifnull(p.get("pay_amount"),0));
+		cDate = ifnull(p.get("cheque_date"),"");
+		v.put("Cheque_Date",if(cDate == "",null,cDate));
+		cPhoto = ifnull(p.get("cheque_photo"),"");
+		v.put("Cheque_Photo",if(cPhoto == "",null,cPhoto));
+		pDue = ifnull(p.get("pay_due"),"");
+		v.put("Payment_Due_Date",if(pDue == "",null,pDue));
+		if(dOn != "")
+		{
+			v.put("Follow_up_Done",true);
+		}
+		if(ownerId != null)
+		{
+			v.put("Owner",ownerId);
+		}
+		if(visitId != "")
+		{
+			savedRec = zoho.crm.updateRecord("Shop_Visits",visitId.toLong(),v);
+		}
+		else
+		{
+			savedRec = zoho.crm.createRecord("Shop_Visits",v);
+		}
+		if(savedRec.get("id") != null)
+		{
+			out.put("visit_id",savedRec.get("id").toString());
+			out.put("account_id",accId);
+			// A new visit closes the follow-up the shop was waiting for.
+			doneId = ifnull(p.get("done_crm_visit_id"),"").toString();
+			if(doneId != "" && doneId != savedRec.get("id").toString())
+			{
+				try
+				{
+					tickMap = Map();
+					tickMap.put("Follow_up_Done",true);
+					tickDone = zoho.crm.updateRecord("Shop_Visits",doneId.toLong(),tickMap);
+				}
+				catch (e4)
+				{
+				}
+			}
+		}
+		else
+		{
+			out.put("error","Could not save the Shop Visit: " + savedRec.toString());
+			out.put("account_id",accId);
+		}
 	}
-	else
+	catch (e)
 	{
-		out.put("error","Could not save the Shop Visit: " + saved.toString());
-		out.put("account_id",accId);
+		out.put("error","Function error: " + e.toString());
 	}
+	return out.toString();
 }
-catch (e)
-{
-	out.put("error","Function error: " + e.toString());
-}
-return out.toString();
