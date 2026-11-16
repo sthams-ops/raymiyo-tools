@@ -411,7 +411,7 @@ export default function Rep({ data, reload, say, waiting = [] }) {
   const myRank = week.findIndex((r) => r.email === me.email);
   let nudge = "";
   if (overdueCount) nudge = `${overdueCount} overdue ${overdueCount === 1 ? "task" : "tasks"}. Clear ${overdueCount === 1 ? "it" : "them"} first.`;
-  else if (myRank > 0) nudge = `${week[myRank - 1].points - week[myRank].points + 1} more points this week and you pass ${firstName(week[myRank - 1])}.`;
+  else if (myRank > 0) nudge = `${week[myRank - 1].points - week[myRank].points + 1} more ${week[myRank - 1].points === week[myRank].points ? "point" : "points"} this week and you pass ${firstName(week[myRank - 1])}.`;
   else if (myRank === 0 && week.length > 1 && week[0].points > 0) nudge = `You lead this week by ${week[0].points - week[1].points} points. ${firstName(week[1])} is chasing.`;
   const stageRank = { "Repeat Buyer": 0, "First Order": 1, Interested: 2, Prospect: 3 };
   const myShops = data.shops

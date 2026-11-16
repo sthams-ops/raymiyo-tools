@@ -58,6 +58,9 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://localhost");
 
+    // Short link for the team: field.raymiyo.com/app always gives the newest Android app file.
+    if (url.pathname === "/app") return res.writeHead(302, { Location: "https://github.com/sthams-ops/raymiyo-tools/releases/latest/download/Raymiyo-Field.apk", "Cache-Control": "no-store" }).end();
+
     if (url.pathname === "/health") return res.writeHead(200, { "Content-Type": "text/plain" }).end("ok");
 
     if (url.pathname.startsWith("/api/")) {

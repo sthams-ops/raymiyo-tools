@@ -41,7 +41,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
 
   if (url.origin === self.location.origin) {
-    if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/photos/") || url.pathname === "/health" || url.pathname === "/shell.json" || url.pathname === "/sw.js") return;
+    if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/photos/") || url.pathname === "/health" || url.pathname === "/app" || url.pathname === "/shell.json" || url.pathname === "/sw.js") return;
     // Opening the app: fresh from the server when there is signal, else the saved copy.
     if (req.mode === "navigate") {
       event.respondWith(

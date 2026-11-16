@@ -391,3 +391,5 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .golive .warnbox { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
 @media (max-width: 1400px) { .golive { margin-left: 16px; margin-right: 16px; } }
 @media (max-width: 520px) { .golive { margin-left: 12px; margin-right: 12px; } }
+/* Field user on a phone: a shorter map keeps the main button on the first screen. */
+@media (max-width: 759px) { .map.map-rep, .map-rep.map { height: 25dvh; min-height: 170px; } }
