@@ -75,7 +75,7 @@ async function pushToCrm(key, visit, shop, user, settings, doneCrmId = "") {
   if (sync.soCrmId) visit.soId = sync.soCrmId;
   visit.crmNote = sync.note ? clean(sync.note, 200) : "";
   await store.hset(key, visit.id, visit);
-  if (sync.accountCrmId && shop && !shop.crmId) {
+  if (sync.accountCrmId && shop && shop.crmId !== sync.accountCrmId) {
     shop.crmId = sync.accountCrmId;
     await store.hset("field:shops", shop.id, shop);
   }

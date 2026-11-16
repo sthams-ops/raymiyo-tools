@@ -2,7 +2,11 @@
 //   - payments taken before the Invoice existed are sent again
 //   - cheques and promised payments drop off once the Invoice balance is zero
 import { store } from "./store.js";
-import { crmEnabled, sendPayment, fetchBalances } from "./crm.js";
+import { crmEnabled, sendPayment, fetchBalances, syncVisit } from "./crm.js";
+import { loadSettings, loadVisits } from "./data.js";
+import { loadUsers } from "./auth.js";
+import { nepal, addDays } from "./time.js";
+import { visitPoints } from "../shared/rules.js";
 
 const GAP = 15 * 60 * 1000;
 const key = (id) => "field:visits:" + String(id).slice(0, 7);
@@ -12,6 +16,7 @@ export async function settle(force = false) {
   const last = Number(await store.get("field:settled")) || 0;
   if (!force && Date.now() - last < GAP) return;
   await store.set("field:settled", Date.now());
+  await resend();
   const shops = Object.values(await store.hall("field:shops")).filter((s) => s && s.dues && s.dues.length);
   const bySo = new Map();
   for (const shop of shops) {
@@ -45,4 +50,28 @@ export async function settle(force = false) {
     }
   }
   for (const shop of changed) await store.hset("field:shops", shop.id, shop);
+}
+
+// Check-ins that CRM refused are sent again, a few each round, for a week.
+async function resend() {
+  const today = nepal().date;
+  const failed = (await loadVisits(addDays(today, -7), today)).filter((v) => v.crm === "error" && !v.deleted).slice(0, 5);
+  if (!failed.length) return;
+  const [users, settings] = await Promise.all([loadUsers(), loadSettings()]);
+  for (const visit of failed) {
+    const shop = await store.hget("field:shops", visit.shopId);
+    if (!shop) continue;
+    const r = await syncVisit(visit, shop, users[visit.rep] || { email: visit.rep, name: visit.rep }, visitPoints(visit, settings.points));
+    if (r.status === "off") return;
+    visit.crm = r.status;
+    visit.crmError = r.detail ? String(r.detail).slice(0, 200) : "";
+    if (r.visitCrmId) visit.crmId = r.visitCrmId;
+    if (r.soCrmId) visit.soId = r.soCrmId;
+    visit.crmNote = r.note ? String(r.note).slice(0, 200) : "";
+    await store.hset(key(visit.id), visit.id, visit);
+    if (r.accountCrmId && shop.crmId !== r.accountCrmId) {
+      shop.crmId = r.accountCrmId;
+      await store.hset("field:shops", shop.id, shop);
+    }
+  }
 }

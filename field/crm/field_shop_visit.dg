@@ -234,6 +234,22 @@ string standalone.field_shop_visit(string crmAPIRequest)
 		{
 			phone = "+977 " + phoneRaw;
 		}
+		// ---- The Account the app remembers may have been deleted in CRM ----
+		if(accId != "")
+		{
+			try
+			{
+				accCheck = zoho.crm.getRecordById("Accounts",accId.toLong());
+				if(accCheck == null || accCheck.get("id") == null)
+				{
+					accId = "";
+				}
+			}
+			catch (e7)
+			{
+				accId = "";
+			}
+		}
 		// ---- Find the shop's Account, or create it ----
 		if(accId == "" && !shopName.contains("(") && !shopName.contains(")") && !shopName.contains(","))
 		{
