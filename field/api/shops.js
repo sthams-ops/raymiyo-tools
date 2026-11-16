@@ -56,6 +56,12 @@ async function act(req, res) {
   const b = readBody(req);
   const shop = await store.hget("field:shops", String(b.id || ""));
   if (!shop) return res.status(404).json({ error: "That shop was not found." });
+  // Anyone standing at an archived shop can bring it back, so it is never saved twice.
+  if (b.action === "restore") {
+    shop.active = true;
+    await store.hset("field:shops", shop.id, shop);
+    return res.json({ shop });
+  }
   if (me.role === "rep" && shop.owner !== me.email) return res.status(403).json({ error: "This shop belongs to someone else." });
   const { date: today, time } = nepal();
   shop.dues = shop.dues || [];

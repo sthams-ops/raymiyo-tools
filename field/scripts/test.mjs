@@ -234,4 +234,12 @@ ok((await call("tv", { query: { key: "wrong-key-wrong-k" } })).code === 401, "TV
 r = await call("tv", { query: { key: "a-long-secret-key" } });
 ok(r.code === 200 && r.data.visits.length === 1 && !("me" in r.data), "TV feed works with the right key");
 
+// an archived shop can be brought back by a field user at check-in
+{
+  const any = Object.values(await store.hall("field:shops"))[0];
+  await call("shops", { as: "mijesh", method: "PATCH", body: { id: any.id, active: false } });
+  const back = await call("shops", { as: "sajina", method: "POST", body: { id: any.id, action: "restore" } });
+  ok(back.code === 200 && back.data.shop.active === true, "a field user can restore an archived shop");
+}
+
 console.log(`All ${passed} checks passed.`);

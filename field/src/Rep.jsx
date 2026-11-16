@@ -89,16 +89,34 @@ export default function Rep({ data, reload, say }) {
     if (!pos) return [];
     const q = query.trim().toLowerCase();
     return data.shops
-      .filter((s) => s.active !== false && (!q || s.name.toLowerCase().includes(q) || (s.area || "").toLowerCase().includes(q)))
+      .filter((s) => (q ? s.name.toLowerCase().includes(q) || (s.area || "").toLowerCase().includes(q) || (phoneKey(q).length >= 4 && phoneKey(s.phone).includes(phoneKey(q))) : s.active !== false))
       .map((s) => ({ s, d: distanceMeters([pos.lat, pos.lng], [s.lat, s.lng]) }))
       .sort((a, b) => a.d - b.d)
       .slice(0, q ? 12 : 6);
   }, [pos, query, data.shops]);
 
+  async function pickShop(shop) {
+    setErr("");
+    if (shop.active === false) {
+      setBusy("restore");
+      try {
+        await api.shopAct(shop.id, "restore");
+        await reload();
+        say(`${shop.name} is active again.`);
+      } catch (e) {
+        setBusy("");
+        return setErr(e.message || "Could not restore the shop. Try again.");
+      }
+      setBusy("");
+    }
+    set({ shopId: shop.id, isNew: false });
+    setStep("log");
+  }
+
   function addShop() {
     if (!(draft.newName || "").trim()) return setErr("Type the shop name first.");
     if (!phoneKey(draft.newPhone)) return setErr("Add the shop's phone number. Ask the owner if it is not on the signboard.");
-    if (twin) return setErr(twin.shop.active === false ? `${twin.shop.name} is already saved but archived. Ask the admin to restore it.` : `${twin.shop.name} is already saved. Tap "Use this shop".`);
+    if (twin) return setErr(twin.shop.active === false ? `${twin.shop.name} is already saved but archived. Tap "Restore and use this shop".` : `${twin.shop.name} is already saved. Tap "Use this shop".`);
     set({ isNew: true, shopId: null });
     setStep("log");
   }
@@ -168,11 +186,11 @@ export default function Rep({ data, reload, say }) {
             </div>
             <label className="search">
               <Search size={18} />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search shops by name or area" aria-label="Search shops" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search shops by name, area or phone" aria-label="Search shops" />
             </label>
             <div className="rows">
               {near.map(({ s, d }) => (
-                <button key={s.id} className="row" onClick={() => { set({ shopId: s.id, isNew: false }); setStep("log"); }}>
+                <button key={s.id} className="row" disabled={!!busy} onClick={() => pickShop(s)}>
                   <span className="when">{fmtDist(d)}</span>
                   <span className="what">
                     <b>{s.name}</b>
@@ -180,6 +198,7 @@ export default function Rep({ data, reload, say }) {
                       {s.type}
                       {s.area ? ", " + s.area : ""}
                       {s.owner !== me.email && users[s.owner] ? ` · ${firstName(users[s.owner])}'s shop` : ""}
+                      {s.active === false ? " · Archived, tap to restore and use" : ""}
                     </small>
                   </span>
                   <ChevronRight size={18} />
@@ -217,9 +236,10 @@ export default function Rep({ data, reload, say }) {
                   This looks like a shop that is already saved: <b>{twin.shop.name}</b>
                   {twin.shop.area ? ", " + twin.shop.area : ""} ({twin.why === "phone" ? "same phone number" : "same name, close to here"}).
                 </span>
-                {twin.shop.active !== false && (
-                  <button className="btn solid" onClick={() => { set({ shopId: twin.shop.id, isNew: false }); setStep("log"); }}>Use this shop</button>
-                )}
+                {twin.shop.active === false && <span>It was archived. You can bring it back and check in.</span>}
+                <button className="btn solid" disabled={!!busy} onClick={() => pickShop(twin.shop)}>
+                  {twin.shop.active === false ? "Restore and use this shop" : "Use this shop"}
+                </button>
               </div>
             )}
             <datalist id="areas">{areas.map((a) => <option key={a} value={a} />)}</datalist>

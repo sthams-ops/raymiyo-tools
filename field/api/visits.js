@@ -124,7 +124,7 @@ async function create(req, res) {
     const twin = findDuplicate(Object.values(await store.hall("field:shops")), { name, phone, lat, lng });
     if (twin) {
       const where = twin.shop.area ? ` in ${twin.shop.area}` : "";
-      const fix = twin.shop.active === false ? "It is archived. Ask the admin to restore it." : "Pick it from the shop list instead.";
+      const fix = twin.shop.active === false ? "It is archived. Search for it in the shop list and tap it to restore it." : "Pick it from the shop list instead.";
       return res.status(409).json({ error: twin.why === "phone" ? `That phone number is already saved for ${twin.shop.name}${where}. ${fix}` : `${twin.shop.name}${where} is already saved close to here. ${fix}`, duplicate: twin.shop.id });
     }
     shop = {
