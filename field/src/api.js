@@ -26,6 +26,7 @@ export const api = {
   updateVisit: (visit) => send("PATCH", "/api/visits", visit),
   deleteVisit: (id) => call("/api/visits?id=" + encodeURIComponent(id), { method: "DELETE" }),
   shopDone: (id) => send("POST", "/api/shops", { id, action: "done" }),
+  shopAct: (id, action, extra) => send("POST", "/api/shops", { id, action, ...extra }),
   saveShop: (shop) => send("PATCH", "/api/shops", shop),
   admin: (op, payload) => send("POST", "/api/admin", { op, ...payload }),
   trackToken: () => send("POST", "/api/track", { action: "token" }),

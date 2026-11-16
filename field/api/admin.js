@@ -5,6 +5,8 @@
 import { store } from "../lib/store.js";
 import { guard, readBody, clean, fail, loadUsers, DOMAIN, OWNER } from "../lib/auth.js";
 import { normalizeSettings, ROLES, COLORS } from "../shared/rules.js";
+import { loadProducts } from "../lib/products.js";
+import { settle } from "../lib/sync.js";
 
 export default async function handler(req, res) {
   try {
@@ -44,6 +46,13 @@ export default async function handler(req, res) {
       const settings = normalizeSettings(b.settings);
       await store.set("field:settings", settings);
       return res.json({ settings });
+    }
+
+    if (b.op === "refreshProducts") {
+      const fresh = await loadProducts(true);
+      if (fresh.error) return res.status(502).json({ error: "Could not read products from CRM: " + fresh.error });
+      await settle(true).catch(() => {});
+      return res.json({ count: fresh.list.length });
     }
 
     res.status(400).json({ error: "Unknown action" });

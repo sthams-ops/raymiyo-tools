@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, FileText, Gauge, MapPinned, Search, Settings as Cog, Store, Trash2, Users } from "lucide-react";
 import { api } from "./api.js";
 import MapView from "./MapView.jsx";
-import { Avatar, Board, VisitRow, VisitFacts, FocusRow } from "./ui.jsx";
+import { Avatar, Board, VisitRow, VisitFacts, FocusList, fmtDay } from "./ui.jsx";
 import { buildMapData, indexBy, weekStartOf } from "./mapdata.js";
 import { toRows, downloadCsv, downloadPdf } from "./export.js";
-import { COLORS, OUTCOMES, ROLES, money, scoreboard, focusList, coach } from "../shared/rules.js";
+import { COLORS, OUTCOMES, ROLES, money, scoreboard, focusList, coach, shopOwes, daysBetween } from "../shared/rules.js";
 
 const TABS = [
   ["live", "Map", MapPinned],
@@ -262,8 +262,13 @@ const STATUS = { push: "Needs a push", watch: "Keep an eye", lead: "Leading", ok
 
 function Insights({ data, users, canEdit, reload, say }) {
   const [period, setPeriod] = useState("week");
-  const [busy, setBusy] = useState(false);
   const t = data.today;
+  const dues = data.shops
+    .filter((s) => s.active !== false)
+    .flatMap((s) => (s.dues || []).map((d) => ({ shop: s, ...d, late: d.date ? daysBetween(d.date, t) : 0 })))
+    .sort((a, b) => b.late - a.late);
+  const owed = dues.reduce((a, d) => a + d.amount, 0);
+  const owedLate = dues.filter((d) => d.late > 0).reduce((a, d) => a + d.amount, 0);
   const from = period === "week" ? weekStartOf(t) : t.slice(0, 7) + "-01";
   const focus = useMemo(() => focusList(data.shops, t, { reorderDays: data.settings.reorderDays }), [data.shops, t, data.settings.reorderDays]);
   const nowTime = new Date(Date.now() + 345 * 60000).toISOString().slice(11, 16);
@@ -278,18 +283,6 @@ function Insights({ data, users, canEdit, reload, say }) {
   const order = { push: 0, watch: 1, ok: 2, lead: 3 };
   const sorted = people.slice().sort((a, b) => order[a.status] - order[b.status] || b.flags.length - a.flags.length);
   const pct = (n) => Math.round(n * 100) + "%";
-  async function done(shop) {
-    setBusy(true);
-    try {
-      await api.shopDone(shop.id);
-      await reload();
-      say("Ticked off.");
-    } catch (e) {
-      say(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
   return (
     <main className="shell single">
       <section className="panel">
@@ -347,11 +340,35 @@ function Insights({ data, users, canEdit, reload, say }) {
             <h2>Shops that need action</h2>
             <p className="muted small">Late deliveries and follow-ups first, then shops that have gone quiet.</p>
           </div>
-          <div className="focusList">
-            {[...overdue, ...dueToday, ...pushes].slice(0, 25).map((f) => (
-              <FocusRow key={f.shop.id} item={f} owner={users[f.shop.owner]} onDone={canEdit ? done : null} busy={busy} />
+          <FocusList items={[...overdue, ...dueToday, ...pushes].slice(0, 25)} users={users} canAct={canEdit} reload={reload} say={say} />
+          {!overdue.length && !dueToday.length && !pushes.length && <p className="muted">Nothing is waiting. Next steps appear here after each check-in.</p>}
+        </div>
+
+        <div className="card">
+          <div>
+            <h2>Money to collect</h2>
+            <p className="muted small">Cheques not yet cleared and payments promised for a date. A line drops off by itself when the CRM invoice balance reaches zero.</p>
+          </div>
+          <div className="stats four">
+            <div className="stat hot"><b>{money(owed)}</b><span>Outstanding</span></div>
+            <div className="stat"><b style={{ color: owedLate ? "var(--bad)" : undefined }}>{money(owedLate)}</b><span>Past its date</span></div>
+          </div>
+          <div className="rows">
+            {dues.map((d) => (
+              <div key={d.shop.id + d.visitId} className="row plain">
+                <span className="what">
+                  <b>{d.shop.name}</b>
+                  <small>
+                    {d.type === "cheque" ? "Cheque dated " : "Promised for "}
+                    {fmtDay(d.date)}
+                    {d.late > 0 ? ` · ${d.late} days late` : d.late === 0 ? " · today" : ` · in ${-d.late} days`}
+                    {users[d.shop.owner] ? " · " + users[d.shop.owner].name.split(" ")[0] : ""}
+                  </small>
+                </span>
+                <span className={"pill " + (d.late > 0 ? "o-no" : d.late >= -7 ? "o-interested" : "stage")}>{money(d.amount)}</span>
+              </div>
             ))}
-            {!overdue.length && !dueToday.length && !pushes.length && <p className="muted">Nothing is waiting. Next steps appear here after each check-in.</p>}
+            {!dues.length && <p className="muted">Nobody owes anything from field orders.</p>}
           </div>
         </div>
       </section>
@@ -407,7 +424,7 @@ function Shops({ data, users, canEdit, reload, say }) {
 }
 
 function ShopForm({ shop, data, canEdit, reload, say, close }) {
-  const [f, setF] = useState({ name: shop.name, type: shop.type, area: shop.area || "", phone: shop.phone || "", owner: shop.owner, terms: shop.terms || "" });
+  const [f, setF] = useState({ name: shop.name, type: shop.type, area: shop.area || "", phone: shop.phone || "", owner: shop.owner, terms: shop.terms || "", margin: shop.margin ?? "" });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const people = data.users.filter((u) => u.active && u.role !== "viewer");
@@ -454,6 +471,7 @@ function ShopForm({ shop, data, canEdit, reload, say, close }) {
           </select>
         </label>
       </div>
+      {input("margin", `Margin, % off our price (maximum ${data.settings.maxMargin})`, { inputMode: "decimal" })}
       <label className="field">
         Belongs to
         <select value={f.owner} disabled={!canEdit} onChange={(e) => setF({ ...f, owner: e.target.value })}>
@@ -462,7 +480,7 @@ function ShopForm({ shop, data, canEdit, reload, say, close }) {
         </select>
       </label>
       <p className="muted small">
-        Stage: {shop.stage || "Prospect"} · {shop.orders} orders · added {shop.createdAt} ·{" "}
+        Stage: {shop.stage || "Prospect"} · {shop.orders} orders{shopOwes(shop) > 0 ? ` · owes ${money(shopOwes(shop))}` : ""} · added {shop.createdAt} ·{" "}
         <a href={`https://www.google.com/maps?q=${shop.lat},${shop.lng}`} target="_blank" rel="noreferrer">open in Google Maps</a>
       </p>
       {err && <p className="error">{err}</p>}
@@ -628,7 +646,21 @@ function SettingsTab({ data, canEdit, reload, say }) {
   const [brands, setBrands] = useState(data.settings.brands.join(", "));
   const [daily, setDaily] = useState(data.settings.dailyVisits);
   const [reorder, setReorder] = useState(data.settings.reorderDays);
+  const [maxMargin, setMaxMargin] = useState(data.settings.maxMargin);
   const [busy, setBusy] = useState(false);
+  async function refreshProducts() {
+    setBusy(true);
+    setErr("");
+    try {
+      const out = await api.admin("refreshProducts", {});
+      await reload();
+      say(`${out.count} products loaded from CRM.`);
+    } catch (e2) {
+      setErr(e2.message);
+    } finally {
+      setBusy(false);
+    }
+  }
   const [err, setErr] = useState("");
   useEffect(() => {
     setPoints(data.settings.points);
@@ -636,6 +668,7 @@ function SettingsTab({ data, canEdit, reload, say }) {
     setBrands(data.settings.brands.join(", "));
     setDaily(data.settings.dailyVisits);
     setReorder(data.settings.reorderDays);
+    setMaxMargin(data.settings.maxMargin);
   }, [data.settings]);
 
   async function save(e) {
@@ -643,7 +676,7 @@ function SettingsTab({ data, canEdit, reload, say }) {
     setBusy(true);
     setErr("");
     try {
-      await api.admin("saveSettings", { settings: { points, farMeters: far, dailyVisits: daily, reorderDays: reorder, brands: brands.split(",").map((b) => b.trim()).filter(Boolean) } });
+      await api.admin("saveSettings", { settings: { points, farMeters: far, dailyVisits: daily, reorderDays: reorder, maxMargin, brands: brands.split(",").map((b) => b.trim()).filter(Boolean) } });
       await reload();
       say("Settings saved. Leaderboards now use the new rules.");
     } catch (e2) {
@@ -692,6 +725,19 @@ function SettingsTab({ data, canEdit, reload, say }) {
               <input type="number" min="3" max="120" value={reorder} disabled={!canEdit} onChange={(e) => setReorder(e.target.value)} />
               <small>Puts the shop on the focus list.</small>
             </label>
+          </div>
+          <h2>Orders</h2>
+          <label className="field">
+            Highest margin a field user can give a shop, in %
+            <input type="number" min="0" max="90" value={maxMargin} disabled={!canEdit} onChange={(e) => setMaxMargin(e.target.value)} />
+            <small>The margin is taken off our CRM price for the whole order and is remembered for each shop.</small>
+          </label>
+          <div className="row plain">
+            <span className="what">
+              <b>{data.products.length} products from CRM</b>
+              <small>{data.productsAt ? "Last read " + new Date(data.productsAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) + ". Names and prices refresh every 6 hours." : "Not read yet."}</small>
+            </span>
+            {canEdit && <button type="button" className="btn small" disabled={busy} onClick={refreshProducts}>Refresh now</button>}
           </div>
           <h2>Check-in rules</h2>
           <label className="field">

@@ -83,8 +83,45 @@ const visit1 = r.data.visit.id;
 {
   const no = await call("shops", { as: "sajina", method: "POST", body: { id: shopId, action: "done" } });
   ok(no.code === 403, "only the shop's owner can tick its task off");
-  const yes = await call("shops", { as: "divash", method: "POST", body: { id: shopId, action: "done" } });
-  ok(yes.code === 200 && yes.data.shop.next === null, "owner ticks the delivery off");
+  let yes = await call("shops", { as: "divash", method: "POST", body: { id: shopId, action: "done" } });
+  ok(yes.code === 400, "a delivery cannot be ticked off without the payment");
+  yes = await call("shops", { as: "divash", method: "POST", body: { id: shopId, action: "deliver", pay: { type: "cheque", date: "2026-12-20" } } });
+  ok(yes.code === 400, "a cheque needs its photo");
+  const chequeDate = (await import("../lib/time.js")).addDays(nepal().date, 30);
+  yes = await call("shops", { as: "divash", method: "POST", body: { id: shopId, action: "deliver", pay: { type: "cheque", date: chequeDate, photo: "/photos/2026-11-15/abc.jpg" } } });
+  ok(yes.code === 200 && yes.data.shop.next === null && yes.data.shop.dues.length === 1 && yes.data.shop.dues[0].amount === 8400, "delivery with a cheque leaves the amount as due");
+  ok(yes.data.visit.deliveredOn === nepal().date && yes.data.visit.pay.type === "cheque", "delivery and cheque are kept on the order");
+  const rules = await import("../shared/rules.js");
+  ok(rules.shopOwes(yes.data.shop) === 8400, "shop owes the cheque amount");
+  const soon = rules.focusList([yes.data.shop], (await import("../lib/time.js")).addDays(chequeDate, -3));
+  ok(soon.some((f) => f.kind === "cheque" && f.level === "soon"), "cheque shows on the focus list before its date");
+  yes = await call("shops", { as: "divash", method: "POST", body: { id: shopId, action: "cleared", visitId: visit1 } });
+  ok(yes.code === 200 && yes.data.shop.dues.length === 0, "cleared cheque drops off");
+}
+{
+  // orders product by product, priced from the CRM list
+  await store.set("field:products", { at: Date.now(), list: [{ id: "111", name: "Pant XL Jumbo", code: "X", category: "Diaper", unit: "Carton", price: 1450 }, { id: "222", name: "Pant L Mini", code: "Y", category: "Diaper", unit: "Carton", price: 1000 }] });
+  const st = await call("state", { as: "sajina" });
+  ok(st.data.products.length === 2, "products reach the screen");
+  const base = { shopName: "Items Shop", phone: "9833333333", outcome: "order", lat: 27.71, lng: 85.31 };
+  let o = await call("visits", { as: "sajina", method: "POST", body: { ...base, value: 5000 } });
+  ok(o.code === 400, "an order needs products once the list is there");
+  o = await call("visits", { as: "sajina", method: "POST", body: { ...base, items: [{ id: "111", qty: 4 }], margin: 80 } });
+  ok(o.code === 400, "margin above the limit is refused");
+  o = await call("visits", { as: "sajina", method: "POST", body: { ...base, items: [{ id: "111", qty: 4, price: 1 }, { id: "222", qty: 3 }, { id: "999", qty: 2 }], margin: 25 } });
+  ok(o.code === 200 && o.data.visit.subtotal === 8800 && o.data.visit.discount === 2200 && o.data.visit.value === 6600, "order total uses CRM prices and the shop margin");
+  ok(o.data.shop.margin === 25 && o.data.visit.items.length === 2, "margin is remembered for the shop, unknown products dropped");
+  const sid = o.data.shop.id;
+  const day = (n) => new Date(Date.now() + 345 * 60000 + n * 86400000).toISOString().slice(0, 10);
+  o = await call("shops", { as: "sajina", method: "POST", body: { id: sid, action: "deliver", pay: { type: "later", date: day(5) } } });
+  ok(o.code === 200 && o.data.shop.dues[0].type === "later" && o.data.shop.dues[0].amount === 6600, "pay later leaves a collection to do");
+  o = await call("shops", { as: "sajina", method: "POST", body: { id: sid, action: "collect", visitId: o.data.visit.id, pay: { type: "cash" } } });
+  ok(o.code === 200 && o.data.shop.dues.length === 0 && o.data.visit.pay.type === "cash", "cash collected clears the due");
+  for (const [id, v] of Object.entries(await store.hall("field:visits:" + nepal().month))) if (v.shopId === sid) await store.hdel("field:visits:" + nepal().month, id);
+  await store.hdel("field:shops", sid);
+  await store.set("field:products", { at: 0, list: [] });
+}
+{
 }
 r = await call("visits", { as: "sajina", method: "POST", body: { shopId, outcome: "order", value: 5000, terms: "Credit (Cheque)", lat: 27.7218, lng: 85.3202 } });
 ok(r.code === 200 && !r.data.visit.first && !r.data.visit.newShop, "second order is a repeat order");

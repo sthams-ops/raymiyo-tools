@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS = {
   brands: ["Chicool", "Aiwibi", "Cocobuddy", "Other"],
   dailyVisits: 12,
   reorderDays: 14,
+  maxMargin: 30,
 };
 
 export function normalizeSettings(saved) {
@@ -50,6 +51,7 @@ export function normalizeSettings(saved) {
   return {
     dailyVisits: whole(s.dailyVisits, 1, 100, DEFAULT_SETTINGS.dailyVisits),
     reorderDays: whole(s.reorderDays, 3, 120, DEFAULT_SETTINGS.reorderDays),
+    maxMargin: whole(s.maxMargin, 0, 90, DEFAULT_SETTINGS.maxMargin),
     points: p,
     farMeters: Number.isFinite(far) ? Math.min(5000, Math.max(20, far)) : DEFAULT_SETTINGS.farMeters,
     brands: brands.length ? brands : DEFAULT_SETTINGS.brands,
@@ -140,7 +142,18 @@ export function daysBetween(from, to) {
 }
 
 const LEVELS = { overdue: 0, today: 1, push: 2, soon: 3 };
-const KIND_ORDER = { deliver: 0, follow: 1, revisit: 2, reorder: 3, warm: 4, retry: 5 };
+const KIND_ORDER = { deliver: 0, collect: 1, cheque: 2, follow: 3, revisit: 4, reorder: 5, warm: 6, retry: 7 };
+
+// Rupees a shop still owes: unpaid deliveries and cheques not yet cleared.
+export const shopOwes = (shop) => (shop.dues || []).reduce((a, d) => a + (d.amount || 0), 0);
+
+// Order maths, the same way CRM does it: list price times quantity, then the
+// shop's margin taken off the whole order.
+export function orderTotals(items, margin) {
+  const subtotal = items.reduce((a, i) => a + i.price * i.qty, 0);
+  const discount = Math.round(subtotal * (Number(margin) || 0)) / 100;
+  return { subtotal, discount, total: Math.round((subtotal - discount) * 100) / 100 };
+}
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 // The to-do list, most urgent first. Each item: { shop, kind, level, title, why, due, late }.
@@ -151,6 +164,17 @@ export function focusList(shops, today, { owner, reorderDays = DEFAULT_SETTINGS.
   for (const s of shops) {
     if (!s || s.active === false || (owner && s.owner !== owner)) continue;
     const since = s.lastVisit ? daysBetween(s.lastVisit, today) : null;
+    // Money first: payments promised for a date, and cheques coming up or late.
+    for (const d of s.dues || []) {
+      if (!d.date) continue;
+      const late = daysBetween(d.date, today);
+      if (late < (d.type === "cheque" ? -7 : -3)) continue;
+      const level = late > 0 ? "overdue" : late === 0 ? "today" : "soon";
+      const when = late > 0 ? `${plural(late, "day")} late` : late === 0 ? "today" : `in ${plural(-late, "day")}`;
+      const rs = money(d.amount);
+      if (d.type === "cheque") out.push({ shop: s, key: s.id + d.visitId, kind: "cheque", level, title: late >= 0 ? `Cheque of ${rs}: check it has cleared` : `Cheque of ${rs} goes to the bank`, why: when, due: d.date, late, due_: d });
+      else out.push({ shop: s, key: s.id + d.visitId, kind: "collect", level, title: `Collect ${rs}`, why: when, due: d.date, late, due_: d });
+    }
     const n = s.next;
     if (n && n.due) {
       const late = daysBetween(n.due, today);

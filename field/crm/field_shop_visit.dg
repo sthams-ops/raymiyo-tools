@@ -27,6 +27,147 @@ try
 	req = crmAPIRequest.toMap();
 	p = req.get("params").get("payload").toMap();
 	action = ifnull(p.get("action"),"save");
+
+	// ---- The app asks for the product list ----
+	if(action == "products")
+	{
+		plist = List();
+		rows = zoho.crm.getRecords("Products",1,200);
+		for each  pr in rows
+		{
+			price = ifnull(pr.get("Unit_Price"),0);
+			if(pr.get("Product_Active") == true && price > 0)
+			{
+				one = Map();
+				one.put("id",pr.get("id").toString());
+				one.put("name",pr.get("Product_Name"));
+				one.put("code",ifnull(pr.get("Product_Code"),""));
+				one.put("category",ifnull(pr.get("Product_Category"),"Other"));
+				one.put("unit",ifnull(pr.get("Usage_Unit"),""));
+				one.put("price",price);
+				plist.add(one);
+			}
+		}
+		out.put("products",plist);
+		return out.toString();
+	}
+
+	// ---- The app asks what is still unpaid on some orders ----
+	if(action == "balances")
+	{
+		bal = Map();
+		for each  sid in ifnull(p.get("so_ids"),"").toString().toList(",")
+		{
+			if(sid != "")
+			{
+				try
+				{
+					invs = zoho.crm.searchRecords("Invoices","(Sales_Order:equals:" + sid + ")");
+					if(invs.size() > 0)
+					{
+						bal.put(sid,ifnull(invs.get(0).get("Balance"),0));
+					}
+				}
+				catch (e5)
+				{
+				}
+			}
+		}
+		out.put("balances",bal);
+		return out.toString();
+	}
+
+	// ---- Cash or a cheque was collected: put it on the order's Invoice ----
+	if(action == "collect")
+	{
+		soId = ifnull(p.get("crm_so_id"),"").toString();
+		invs = zoho.crm.searchRecords("Invoices","(Sales_Order:equals:" + soId + ")");
+		if(soId == "" || invs.size() == 0)
+		{
+			out.put("waiting",true);
+			return out.toString();
+		}
+		invId = invs.get(0).get("id").toString();
+		inv = zoho.crm.getRecordById("Invoices",invId.toLong());
+		upd = Map();
+		if(p.get("pay_type") == "Cheque")
+		{
+			cd = p.get("cheque_date").toString();
+			d1 = ifnull(inv.get("PDC_Date"),"").toString();
+			d2 = ifnull(inv.get("PDC2_Date"),"").toString();
+			if(d1 == "" || d1 == cd)
+			{
+				upd.put("PDC_Date",cd);
+				upd.put("PDC_Status","Received");
+			}
+			else if(d2 == "" || d2 == cd)
+			{
+				upd.put("PDC2_Date",cd);
+				upd.put("PDC2_Status","Received");
+			}
+			else
+			{
+				out.put("error","This invoice already has two cheques in CRM. Add this one by hand.");
+				return out.toString();
+			}
+			saved = zoho.crm.updateRecord("Invoices",invId.toLong(),upd);
+			photoUrl = ifnull(p.get("cheque_photo"),"").toString();
+			if(photoUrl != "" && d1 != cd && d2 != cd)
+			{
+				try
+				{
+					pic = invokeurl
+					[
+						url :photoUrl
+						type :GET
+					];
+					pic.setFileName("cheque-" + cd + ".jpg");
+					zoho.crm.attachFile("Invoices",invId.toLong(),pic);
+				}
+				catch (e6)
+				{
+				}
+			}
+		}
+		else
+		{
+			rowsNow = List();
+			already = false;
+			mark = "Field app " + ifnull(p.get("visit_id"),"");
+			for each  ph in ifnull(inv.get("Payment_History"),List())
+			{
+				keep = Map();
+				keep.put("id",ph.get("id"));
+				rowsNow.add(keep);
+				if(ifnull(ph.get("Remarks"),"").contains(mark))
+				{
+					already = true;
+				}
+			}
+			if(!already)
+			{
+				row = Map();
+				row.put("Paid_Date",p.get("pay_on"));
+				row.put("Paid_Amount",p.get("pay_amount"));
+				row.put("Payment_Method","Cash");
+				row.put("Remarks","Cash collected at the shop. " + mark);
+				rowsNow.add(row);
+				upd.put("Payment_History",rowsNow);
+				saved = zoho.crm.updateRecord("Invoices",invId.toLong(),upd);
+			}
+			else
+			{
+				saved = {"id":invId};
+			}
+		}
+		if(saved.get("id") == null)
+		{
+			out.put("error","Could not update the invoice: " + saved.toString());
+		}
+		out.put("invoice_id",invId);
+		return out.toString();
+	}
+
 	visitKey = ifnull(p.get("visit_id"),"");
 	if(visitKey == "")
 	{
@@ -200,6 +341,62 @@ try
 	}
 	zoho.crm.updateRecord("Accounts",accId.toLong(),accUpd);
 
+	// ---- An order with products becomes a Sales Order, once ----
+	soId = ifnull(p.get("crm_so_id"),"").toString();
+	items = ifnull(p.get("items"),List());
+	if(soId == "" && p.get("outcome") == "order" && items.size() > 0)
+	{
+		so = Map();
+		so.put("Subject","Goods sold to " + shopName);
+		so.put("Account_Name",accId);
+		so.put("Sales_Order_Type","B2B");
+		so.put("Status","Created");
+		so.put("Discount",ifnull(p.get("discount"),0));
+		so.put("Billing_City","Kathmandu");
+		so.put("Billing_Street",ifnull(p.get("shop_area"),""));
+		so.put("Billing_Country","Nepal");
+		so.put("Description","From the Raymiyo Field app. Check-in " + visitKey + " by " + ifnull(p.get("rep_name"),repEmail) + ". Shop margin " + ifnull(p.get("margin"),0) + "%.");
+		if(ownerId != null)
+		{
+			so.put("Owner",ownerId);
+		}
+		linesA = List();
+		linesB = List();
+		for each  it in items
+		{
+			la = Map();
+			la.put("Product_Name",it.get("id").toString());
+			la.put("Quantity",it.get("qty"));
+			la.put("List_Price",it.get("price"));
+			linesA.add(la);
+			lb = Map();
+			lb.put("product",it.get("id").toString());
+			lb.put("quantity",it.get("qty"));
+			lb.put("list_price",it.get("price"));
+			linesB.add(lb);
+		}
+		so.put("Ordered_Items",linesA);
+		madeSo = zoho.crm.createRecord("Sales_Orders",so);
+		if(madeSo.get("id") == null)
+		{
+			so.remove("Ordered_Items");
+			so.put("Product_Details",linesB);
+			madeSo2 = zoho.crm.createRecord("Sales_Orders",so);
+			if(madeSo2.get("id") != null)
+			{
+				madeSo = madeSo2;
+			}
+		}
+		if(madeSo.get("id") != null)
+		{
+			soId = madeSo.get("id").toString();
+		}
+		else
+		{
+			out.put("note","Sales Order not created: " + madeSo.toString());
+		}
+	}
+
 	// ---- Save the Shop Visit ----
 	outcomeLabel = ifnull(outcomes.get(p.get("outcome")),"Interested");
 	title = shopName;
@@ -244,6 +441,28 @@ try
 	}
 	v.put("Visit_ID",visitKey);
 	v.put("Cancelled",false);
+	if(soId != "")
+	{
+		v.put("Sales_Order",soId);
+		out.put("so_id",soId);
+	}
+	v.put("Order_Items",ifnull(p.get("items_text"),""));
+	v.put("Shop_Margin",ifnull(p.get("margin"),0));
+	dOn = ifnull(p.get("delivered_on"),"");
+	v.put("Delivered_On",if(dOn == "",null,dOn));
+	pType = ifnull(p.get("pay_type"),"");
+	v.put("Payment_Type",if(pType == "",null,pType));
+	v.put("Amount_Collected",ifnull(p.get("pay_amount"),0));
+	cDate = ifnull(p.get("cheque_date"),"");
+	v.put("Cheque_Date",if(cDate == "",null,cDate));
+	cPhoto = ifnull(p.get("cheque_photo"),"");
+	v.put("Cheque_Photo",if(cPhoto == "",null,cPhoto));
+	pDue = ifnull(p.get("pay_due"),"");
+	v.put("Payment_Due_Date",if(pDue == "",null,pDue));
+	if(dOn != "")
+	{
+		v.put("Follow_up_Done",true);
+	}
 	if(ownerId != null)
 	{
 		v.put("Owner",ownerId);

@@ -35,11 +35,26 @@ async function send(body) {
     try {
       out = JSON.parse(data.details && data.details.output ? data.details.output : "{}");
     } catch {}
-    if (out.error) return { status: "error", detail: String(out.error) };
-    return { status: "ok", visitCrmId: out.visit_id || "", accountCrmId: out.account_id || "" };
+    if (out.error) return { status: "error", detail: String(out.error), soCrmId: out.so_id || "", accountCrmId: out.account_id || "", out };
+    return { status: "ok", visitCrmId: out.visit_id || "", accountCrmId: out.account_id || "", soCrmId: out.so_id || "", note: out.note ? String(out.note) : "", out };
   } catch (e) {
     return { status: "error", detail: e.name === "TimeoutError" ? "Zoho took too long to answer" : e.message };
   }
+}
+
+const abs = (url) => (url && url.startsWith("/") ? appUrl() + url : url || "");
+
+// Delivery and payment details kept on the order's check-in.
+function payFields(visit) {
+  const p = visit.pay || {};
+  return {
+    delivered_on: visit.deliveredOn || "",
+    pay_type: p.type === "cash" ? "Cash" : p.type === "cheque" ? "Cheque" : p.type === "later" ? "Pay later" : "",
+    pay_amount: p.type === "cash" || p.type === "cheque" ? p.amount || 0 : 0,
+    cheque_date: p.type === "cheque" ? p.date || "" : "",
+    cheque_photo: p.type === "cheque" ? abs(p.photo) : "",
+    pay_due: p.type === "later" ? p.date || "" : "",
+  };
 }
 
 // Creates the Shop Visit in CRM, or updates it when the same check-in is sent again.
@@ -69,6 +84,12 @@ export function syncVisit(visit, shop, user, points = 0, doneCrmId = "") {
     next_step: visit.nextStep || "",
     follow_up_date: visit.followUp || "",
     brands: (visit.brands || []).join(", "),
+    items: (visit.items || []).map((i) => ({ id: i.id, qty: i.qty, price: i.price })),
+    items_text: (visit.items || []).map((i) => `${i.qty} x ${i.name}`).join("\n"),
+    margin: visit.margin || 0,
+    discount: visit.discount || 0,
+    crm_so_id: visit.soId || "",
+    ...payFields(visit),
     note: visit.note || "",
     points,
     away_from_shop: !!visit.far,
@@ -89,4 +110,26 @@ export function cancelVisit(visit, shop) {
 export function doneVisit(visit) {
   if (!visit || !visit.crmId) return Promise.resolve({ status: "off" });
   return send({ action: "done", visit_id: visit.id, crm_visit_id: visit.crmId });
+}
+
+// The sellable products, straight from the CRM Products module.
+export async function fetchProducts() {
+  const r = await send({ action: "products" });
+  if (r.status !== "ok") return r;
+  return { status: "ok", products: Array.isArray(r.out.products) ? r.out.products : [] };
+}
+
+// Puts a cash payment or a cheque on the order's Invoice in CRM. Answers
+// status "waiting" while the Sales Order has not been marked Delivered yet.
+export async function sendPayment(visit) {
+  if (!visit.soId || !visit.pay || visit.pay.type === "later") return { status: "off" };
+  const r = await send({ action: "collect", visit_id: visit.id, crm_so_id: visit.soId, shop_name: visit.shopName, ...payFields(visit), pay_on: visit.pay.at || visit.date });
+  if (r.status === "ok" && r.out.waiting) return { status: "waiting", detail: "The Sales Order is not marked Delivered in CRM yet." };
+  return r;
+}
+
+// What is still unpaid on each order's Invoice: { soId: balance }.
+export async function fetchBalances(soIds) {
+  const r = await send({ action: "balances", so_ids: soIds.join(",") });
+  return r.status === "ok" ? r.out.balances || {} : null;
 }

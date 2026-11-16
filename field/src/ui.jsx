@@ -1,7 +1,9 @@
 // Small pieces used on every screen.
 import { useEffect, useState } from "react";
-import { Check, Navigation, Phone, X } from "lucide-react";
-import { OUTCOMES, money, visitPoints } from "../shared/rules.js";
+import { Camera, Check, Navigation, Phone, X } from "lucide-react";
+import { api } from "./api.js";
+import { shrinkPhoto } from "./geo.js";
+import { OUTCOMES, money, visitPoints, shopOwes } from "../shared/rules.js";
 
 // A photo that opens full screen inside the app, with a clear way back.
 export function Photo({ src, alt }) {
@@ -31,14 +33,64 @@ export function Photo({ src, alt }) {
 
 const LEVEL_LABEL = { overdue: "Overdue", today: "Today", push: "Push", soon: "Coming up" };
 
+// Delivery or collection: how is the shop paying? Cash, a cheque (date and
+// photo, the same as CRM asks for) or on a later date.
+function PayForm({ item, allowLater, onSave, onCancel, busy, err }) {
+  const amountDue = item.due_ ? item.due_.amount : (item.shop.next && item.shop.next.amount) || "";
+  const [f, setF] = useState({ type: "", amount: String(amountDue || ""), date: "", file: null });
+  const set = (patch) => setF((x) => ({ ...x, ...patch }));
+  const types = [["cash", "Cash"], ["cheque", "Cheque"], ...(allowLater ? [["later", "Will pay later"]] : [])];
+  return (
+    <div className="payform">
+      <h3>{allowLater ? "Delivered. How is the shop paying?" : "Payment received"}</h3>
+      <div className="chips" role="group" aria-label="Payment">
+        {types.map(([k, label]) => (
+          <button key={k} type="button" className="chip" aria-pressed={f.type === k} onClick={() => set({ type: k })}>{label}</button>
+        ))}
+      </div>
+      {f.type && (
+        <label className="field">
+          Amount in rupees
+          <input value={f.amount} inputMode="decimal" onChange={(e) => set({ amount: e.target.value })} />
+        </label>
+      )}
+      {f.type === "cheque" && (
+        <>
+          <label className="field">
+            Date written on the cheque
+            <input type="date" value={f.date} onChange={(e) => set({ date: e.target.value })} />
+          </label>
+          <label className="field">
+            <span><Camera size={14} /> Photo of the cheque{f.file ? `: ${f.file.name}` : ""}</span>
+            <input type="file" accept="image/*" capture="environment" onChange={(e) => set({ file: e.target.files && e.target.files[0] })} />
+          </label>
+        </>
+      )}
+      {f.type === "later" && (
+        <label className="field">
+          The shop will pay on
+          <input type="date" value={f.date} onChange={(e) => set({ date: e.target.value })} />
+        </label>
+      )}
+      {err && <p className="error">{err}</p>}
+      <div className="chips">
+        <button type="button" className="btn solid" disabled={busy || !f.type} onClick={() => onSave(f)}>{busy ? "Saving…" : "Save"}</button>
+        <button type="button" className="btn" disabled={busy} onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 // One line of the to-do list: what to do at which shop, with call and directions.
-export function FocusRow({ item, owner, onDone, busy }) {
+function FocusRow({ item, owner, canAct, act, open, setOpen, busy, err }) {
   const s = item.shop;
+  const paying = open === item.key;
+  const owes = shopOwes(s);
   return (
     <div className={"focus lv-" + item.level}>
       <div className="focusTop">
         <span className={"tag lv-" + item.level}>{LEVEL_LABEL[item.level]}</span>
-        <small>{item.why}</small>
+        <small>{item.due ? fmtDay(item.due) + " · " : ""}{item.why}</small>
       </div>
       <b>{s.name}</b>
       <p>
@@ -46,22 +98,65 @@ export function FocusRow({ item, owner, onDone, busy }) {
         {s.area ? " · " + s.area : ""}
         {owner ? " · " + firstName(owner) : ""}
       </p>
-      {s.lastNote && <p className="quote">“{s.lastNote}”</p>}
-      <div className="focusActs">
-        {s.phone && (
-          <a className="btn small" href={"tel:" + s.phone}>
-            <Phone size={15} /> Call
+      {owes > 0 && item.kind !== "collect" && item.kind !== "cheque" && <p className="owes">Owes {money(owes)}</p>}
+      {s.lastNote && !item.due_ && <p className="quote">“{s.lastNote}”</p>}
+      {!paying && (
+        <div className="focusActs">
+          {s.phone && (
+            <a className="btn small" href={"tel:" + s.phone}>
+              <Phone size={15} /> Call
+            </a>
+          )}
+          <a className="btn small" href={`https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}`} target="_blank" rel="noreferrer">
+            <Navigation size={15} /> Directions
           </a>
-        )}
-        <a className="btn small" href={`https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}`} target="_blank" rel="noreferrer">
-          <Navigation size={15} /> Directions
-        </a>
-        {onDone && s.next && (
-          <button className="btn small" disabled={busy} onClick={() => onDone(s)}>
-            <Check size={15} /> {item.kind === "deliver" ? "Delivered" : "Done"}
-          </button>
-        )}
-      </div>
+          {canAct && item.kind === "deliver" && <button className="btn small" onClick={() => setOpen(item.key)}><Check size={15} /> Delivered</button>}
+          {canAct && item.kind === "collect" && <button className="btn small" onClick={() => setOpen(item.key)}><Check size={15} /> Collected</button>}
+          {canAct && item.kind === "cheque" && item.late >= 0 && <button className="btn small" disabled={busy} onClick={() => act(item, "cleared")}><Check size={15} /> Cleared</button>}
+          {canAct && (item.kind === "follow" || item.kind === "revisit") && <button className="btn small" disabled={busy} onClick={() => act(item, "done")}><Check size={15} /> Done</button>}
+        </div>
+      )}
+      {paying && <PayForm item={item} allowLater={item.kind === "deliver"} busy={busy} err={err} onCancel={() => setOpen(null)} onSave={(f) => act(item, item.kind === "deliver" ? "deliver" : "collect", f)} />}
+    </div>
+  );
+}
+
+// The to-do list with its buttons. users is only passed on the admin screen,
+// where each line also names the person.
+export function FocusList({ items, users, canAct = true, reload, say }) {
+  const [open, setOpen] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  async function act(item, action, f) {
+    setBusy(true);
+    setErr("");
+    try {
+      const extra = { visitId: item.due_ ? item.due_.visitId : undefined };
+      if (f) {
+        let photo = "";
+        if (f.type === "cheque") {
+          if (!f.file) throw new Error("Take a photo of the cheque.");
+          photo = (await api.photo(await shrinkPhoto(f.file))).url;
+        }
+        extra.pay = { type: f.type, amount: Number(String(f.amount).replace(/[^0-9.]/g, "")), date: f.date, photo };
+      }
+      const out = await api.shopAct(item.shop.id, action, extra);
+      await reload();
+      setOpen(null);
+      const waiting = out.visit && out.visit.payCrm === "waiting";
+      say(action === "done" ? "Ticked off. Well done." : action === "cleared" ? "Cheque marked as cleared." : waiting ? "Saved. It goes on the CRM invoice once the order is marked Delivered there." : "Saved.");
+    } catch (e) {
+      setErr(e.message);
+      if (!f) say(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="focusList">
+      {items.map((f) => (
+        <FocusRow key={f.key || f.shop.id} item={{ ...f, key: f.key || f.shop.id }} owner={users ? users[f.shop.owner] : null} canAct={canAct} act={act} open={open} setOpen={(k) => { setErr(""); setOpen(k); }} busy={busy} err={err} />
+      ))}
     </div>
   );
 }
@@ -159,6 +254,25 @@ export function VisitFacts({ v, shop, user, points }) {
           </dd>
         </>
       )}
+      {v.items && v.items.length > 0 && (
+        <>
+          <dt>Products</dt>
+          <dd>
+            {v.items.map((i) => <span key={i.id} className="line">{i.qty} × {i.name}</span>)}
+            <span className="line muted">{money(v.subtotal)} less {v.margin}% margin</span>
+          </dd>
+        </>
+      )}
+      {v.deliveredOn && (
+        <>
+          <dt>Delivered</dt>
+          <dd>
+            {fmtDay(v.deliveredOn)}
+            {v.pay ? " · " + (v.pay.type === "cash" ? `cash ${money(v.pay.amount)}` : v.pay.type === "cheque" ? `cheque ${money(v.pay.amount)} dated ${fmtDay(v.pay.date)}` : `will pay ${money(v.pay.amount)} on ${fmtDay(v.pay.date)}`) : ""}
+            {v.pay && v.pay.photo && <Photo src={v.pay.photo} alt="Cheque" />}
+          </dd>
+        </>
+      )}
       {v.nextStep && v.nextStep !== "No action" && (
         <>
           <dt>Next step</dt>
@@ -197,7 +311,13 @@ export function VisitFacts({ v, shop, user, points }) {
       {v.crm && v.crm !== "off" && (
         <>
           <dt>CRM</dt>
-          <dd>{v.crm === "ok" ? "Saved to Zoho CRM" : "Not saved to CRM: " + (v.crmError || "unknown error")}</dd>
+          <dd>
+            {v.crm === "ok" ? "Saved to Zoho CRM" : "Not saved to CRM: " + (v.crmError || "unknown error")}
+            {v.soId ? " · Sales Order created" : ""}
+            {v.crmNote ? <span className="line error">{v.crmNote}</span> : null}
+            {v.payCrm === "waiting" && <span className="line">Payment waits for the order to be marked Delivered in CRM.</span>}
+            {v.payCrm === "error" && <span className="line error">Payment not on the invoice: {v.payCrmError}</span>}
+          </dd>
         </>
       )}
     </dl>

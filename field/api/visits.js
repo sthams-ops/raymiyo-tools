@@ -7,10 +7,37 @@ import { guard, loadUsers, readBody, clean, fail, rid } from "../lib/auth.js";
 import { loadSettings, stageFor } from "../lib/data.js";
 import { nepal, addDays, isDate } from "../lib/time.js";
 import { syncVisit, cancelVisit } from "../lib/crm.js";
-import { OUTCOMES, NEXT_STEPS, distanceMeters, visitPoints, phoneKey, findDuplicate } from "../shared/rules.js";
+import { OUTCOMES, NEXT_STEPS, distanceMeters, visitPoints, phoneKey, findDuplicate, orderTotals } from "../shared/rules.js";
+import { loadProducts } from "../lib/products.js";
 
 const TERMS = ["Cash", "Credit (Cheque)"];
 const bad = (res, msg) => res.status(400).json({ error: msg });
+
+// An order with products: prices come from the CRM list, never from the phone.
+function readItems(b, res, products, maxMargin, shopMargin) {
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const items = [];
+  for (const raw of Array.isArray(b.items) ? b.items.slice(0, 40) : []) {
+    const p = byId.get(String(raw.id));
+    const qty = Math.round(Number(raw.qty));
+    if (!p || !(qty > 0) || qty > 9999) continue;
+    const same = items.find((i) => i.id === p.id);
+    if (same) same.qty += qty;
+    else items.push({ id: p.id, name: p.name, price: p.price, qty });
+  }
+  if (!items.length) {
+    bad(res, "Add at least one product to the order.");
+    return null;
+  }
+  let margin = b.margin == null || b.margin === "" ? Number(shopMargin) || 0 : Number(b.margin);
+  if (!Number.isFinite(margin) || margin < 0 || margin > maxMargin) {
+    bad(res, `The shop's margin must be between 0 and ${maxMargin}%.`);
+    return null;
+  }
+  margin = Math.round(margin * 100) / 100;
+  const t = orderTotals(items, margin);
+  return { value: t.total, terms: TERMS.includes(b.terms) ? b.terms : "Cash", items, margin, subtotal: t.subtotal, discount: t.discount };
+}
 
 function readOrder(b, res) {
   if (b.outcome !== "order") return { value: 0, terms: "" };
@@ -33,7 +60,7 @@ function followUp(outcome, date, picked) {
 
 // What the shop is waiting for, shown in the field user's focus list.
 function setNext(shop, visit) {
-  shop.next = visit.nextStep && visit.nextStep !== "No action" && visit.followUp ? { step: visit.nextStep, due: visit.followUp, visitId: visit.id } : null;
+  shop.next = visit.nextStep && visit.nextStep !== "No action" && visit.followUp ? { step: visit.nextStep, due: visit.followUp, visitId: visit.id, amount: visit.value || 0 } : null;
   shop.lastOutcome = visit.outcome;
   shop.lastNote = (visit.note || "").slice(0, 140);
 }
@@ -41,9 +68,12 @@ function setNext(shop, visit) {
 async function pushToCrm(key, visit, shop, user, settings, doneCrmId = "") {
   const sync = await syncVisit(visit, shop, user, visitPoints(visit, settings.points), doneCrmId);
   if (sync.status === "off") return;
+  if (sync.soCrmId) visit.soId = sync.soCrmId;
   visit.crm = sync.status;
   visit.crmError = sync.detail ? clean(sync.detail, 200) : "";
   if (sync.visitCrmId) visit.crmId = sync.visitCrmId;
+  if (sync.soCrmId) visit.soId = sync.soCrmId;
+  visit.crmNote = sync.note ? clean(sync.note, 200) : "";
   await store.hset(key, visit.id, visit);
   if (sync.accountCrmId && shop && !shop.crmId) {
     shop.crmId = sync.accountCrmId;
@@ -72,8 +102,6 @@ async function create(req, res) {
     return bad(res, "Your location is missing. Turn on GPS and try again.");
   }
   if (!OUTCOMES[b.outcome]) return bad(res, "Pick what happened at the shop.");
-  const order = readOrder(b, res);
-  if (!order) return;
 
   const settings = await loadSettings();
   const { date, time, month } = nepal();
@@ -118,6 +146,12 @@ async function create(req, res) {
     newShop = true;
   }
 
+  // With the CRM product list on hand an order is taken product by product.
+  const products = b.outcome === "order" ? (await loadProducts()).list : [];
+  const order = products.length ? readItems(b, res, products, settings.maxMargin, shop.margin) : readOrder(b, res);
+  if (!order) return;
+  if (order.items) shop.margin = order.margin;
+
   const distance = newShop ? 0 : distanceMeters([lat, lng], [shop.lat, shop.lng]);
   const brands = Array.isArray(b.brands) ? b.brands.map((x) => clean(x, 30)).filter((x) => settings.brands.includes(x)) : [];
   const photo = typeof b.photo === "string" && /^(https:\/\/[^\s]+|\/photos\/[\w\-\/]+\.jpg)$/.test(b.photo) ? b.photo.slice(0, 400) : "";
@@ -132,6 +166,7 @@ async function create(req, res) {
     outcome: b.outcome,
     value: order.value,
     terms: order.terms,
+    ...(order.items ? { items: order.items, margin: order.margin, subtotal: order.subtotal, discount: order.discount } : {}),
     brands,
     note: clean(b.note, 500),
     photo,
@@ -183,8 +218,12 @@ async function update(req, res) {
   const { key, visit } = await find(b.id);
   if (!visit) return res.status(404).json({ error: "That check-in was not found." });
   if (!OUTCOMES[b.outcome]) return bad(res, "Pick what happened at the shop.");
-  const order = readOrder(b, res);
+  if (visit.soId && b.outcome !== "order") return bad(res, "This order is already a Sales Order in CRM. Cancel it in CRM first, then delete the check-in here.");
+  // An order taken product by product keeps its products and amount.
+  const itemised = visit.items && visit.items.length && b.outcome === "order";
+  const order = itemised ? { value: visit.value, terms: TERMS.includes(b.terms) ? b.terms : visit.terms } : readOrder(b, res);
   if (!order) return;
+  if (!itemised) for (const k of ["items", "margin", "subtotal", "discount"]) delete visit[k];
 
   const shop = await store.hget("field:shops", visit.shopId);
   if (shop) {
@@ -228,6 +267,7 @@ async function remove(req, res) {
       shop.stage = stageFor(shop, "");
     }
     if (shop.next && shop.next.visitId === visit.id) shop.next = null;
+    if (shop.dues) shop.dues = shop.dues.filter((d) => d.visitId !== visit.id);
     await store.hset("field:shops", shop.id, shop);
   }
   await store.hdel(key, visit.id);

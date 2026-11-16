@@ -4,10 +4,10 @@ import { Camera, ChevronRight, MapPin, Play, Search, Square } from "lucide-react
 import { api } from "./api.js";
 import { getPosition, shrinkPhoto } from "./geo.js";
 import MapView from "./MapView.jsx";
-import { Board, VisitRow, VisitFacts, FocusRow, firstName } from "./ui.jsx";
+import { Board, VisitRow, VisitFacts, FocusList, firstName } from "./ui.jsx";
 import { buildMapData, indexBy } from "./mapdata.js";
 import { isAndroidApp, startTracking, stopTracking } from "./tracking.js";
-import { OUTCOMES, distanceMeters, visitPoints, focusList, findDuplicate, phoneKey } from "../shared/rules.js";
+import { OUTCOMES, distanceMeters, visitPoints, focusList, findDuplicate, phoneKey, orderTotals, shopOwes, money } from "../shared/rules.js";
 
 const fmtDist = (m) => (m < 1000 ? m + " m" : (m / 1000).toFixed(1) + " km");
 
@@ -95,19 +95,6 @@ export default function Rep({ data, reload, say }) {
       .slice(0, q ? 12 : 6);
   }, [pos, query, data.shops]);
 
-  async function markDone(shop) {
-    setBusy("done");
-    try {
-      await api.shopDone(shop.id);
-      await reload();
-      say("Ticked off. Well done.");
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setBusy("");
-    }
-  }
-
   function addShop() {
     if (!(draft.newName || "").trim()) return setErr("Type the shop name first.");
     if (!phoneKey(draft.newPhone)) return setErr("Add the shop's phone number. Ask the owner if it is not on the signboard.");
@@ -119,7 +106,10 @@ export default function Rep({ data, reload, say }) {
   async function save() {
     if (!draft.outcome) return setErr("Pick what happened at the shop.");
     const value = Number(String(draft.value || "").replace(/[^0-9]/g, ""));
-    if (draft.outcome === "order" && !(value > 0)) return setErr("Enter the order amount in rupees.");
+    const hasList = data.products.length > 0;
+    const items = Object.entries(draft.qty || {}).map(([id, qty]) => ({ id, qty: Number(qty) })).filter((i) => i.qty > 0);
+    if (draft.outcome === "order" && hasList && !items.length) return setErr("Add at least one product to the order.");
+    if (draft.outcome === "order" && !hasList && !(value > 0)) return setErr("Enter the order amount in rupees.");
     if (!draft.isNew && shops[draft.shopId] && !phoneKey(shops[draft.shopId].phone) && !phoneKey(draft.phone)) return setErr("Add the shop's phone number.");
     setErr("");
     setBusy("saving");
@@ -140,6 +130,8 @@ export default function Rep({ data, reload, say }) {
         ...shopPart,
         outcome: draft.outcome,
         value,
+        items: draft.outcome === "order" ? items : [],
+        margin: draft.margin === undefined || draft.margin === "" ? undefined : Number(draft.margin),
         terms: draft.terms || "Cash",
         brands: draft.brands || [],
         note: draft.note || "",
@@ -242,6 +234,14 @@ export default function Rep({ data, reload, say }) {
 
   if (step === "log") {
     const shop = draft.isNew ? { name: draft.newName, type: draft.newType || "Retailer", area: draft.newArea } : shops[draft.shopId];
+    const qty = draft.qty || {};
+    const picked = data.products.filter((p) => qty[p.id] > 0).map((p) => ({ ...p, qty: Number(qty[p.id]) }));
+    const margin = draft.margin === undefined ? shop.margin || 0 : draft.margin;
+    const totals = orderTotals(picked, Number(margin) || 0);
+    const pq = (draft.prodQ || "").trim().toLowerCase();
+    const shown = data.products.filter((p) => !pq || (p.name + " " + p.code).toLowerCase().includes(pq));
+    const setQty = (id, n) => set({ qty: { ...qty, [id]: Math.max(0, Math.min(9999, Math.round(Number(n) || 0))) } });
+    const owes = draft.isNew ? 0 : shopOwes(shop);
     return (
       <main className="shell">
         {map}
@@ -272,12 +272,55 @@ export default function Rep({ data, reload, say }) {
                 ))}
               </div>
             </div>
+            {draft.outcome === "order" && owes > 0 && <p className="warnbox">This shop still owes {money(owes)}. Ask about it before taking a new order.</p>}
+            {draft.outcome === "order" && data.products.length > 0 && (
+              <>
+                <div>
+                  <h3>Products ordered</h3>
+                  <label className="search">
+                    <Search size={18} />
+                    <input value={draft.prodQ || ""} onChange={(e) => set({ prodQ: e.target.value })} placeholder="Search products" aria-label="Search products" />
+                  </label>
+                </div>
+                <div className="prodList">
+                  {shown.map((p, i) => (
+                    <div key={p.id}>
+                      {(i === 0 || shown[i - 1].category !== p.category) && <h3>{p.category}</h3>}
+                      <div className={"prod" + (qty[p.id] > 0 ? " on" : "")}>
+                        <span>
+                          <b>{p.name}</b>
+                          <small>{money(p.price)}</small>
+                        </span>
+                        <span className="step">
+                          <button type="button" aria-label={"Less " + p.name} onClick={() => setQty(p.id, (qty[p.id] || 0) - 1)}>−</button>
+                          <input inputMode="numeric" aria-label={"Quantity of " + p.name} value={qty[p.id] || ""} placeholder="0" onChange={(e) => setQty(p.id, e.target.value.replace(/[^0-9]/g, ""))} />
+                          <button type="button" aria-label={"More " + p.name} onClick={() => setQty(p.id, (qty[p.id] || 0) + 1)}>+</button>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {!shown.length && <p className="muted">No product matches.</p>}
+                </div>
+                <label className="field">
+                  This shop's margin, % off our price
+                  <input value={margin} inputMode="decimal" onChange={(e) => set({ margin: e.target.value.replace(/[^0-9.]/g, "") })} placeholder="0" />
+                  <small>Saved for this shop. Maximum {data.settings.maxMargin}%.</small>
+                </label>
+                <div className="totals">
+                  <div><span>{picked.reduce((a, p) => a + p.qty, 0)} items</span><span>{money(totals.subtotal)}</span></div>
+                  <div><span>Margin {Number(margin) || 0}%</span><span>− {money(totals.discount)}</span></div>
+                  <div className="grand"><span>Shop pays</span><span>{money(totals.total)}</span></div>
+                </div>
+              </>
+            )}
             {draft.outcome === "order" && (
               <>
-                <label className="field">
-                  Order amount in rupees
-                  <input value={draft.value || ""} onChange={(e) => set({ value: e.target.value })} inputMode="numeric" placeholder="e.g. 8400" />
-                </label>
+                {!data.products.length && (
+                  <label className="field">
+                    Order amount in rupees
+                    <input value={draft.value || ""} onChange={(e) => set({ value: e.target.value })} inputMode="numeric" placeholder="e.g. 8400" />
+                  </label>
+                )}
                 <div className="chips" role="group" aria-label="Payment">
                   {["Cash", "Credit (Cheque)"].map((t) => (
                     <button key={t} className="chip" aria-pressed={(draft.terms || "Cash") === t} onClick={() => set({ terms: t })}>
@@ -403,19 +446,19 @@ export default function Rep({ data, reload, say }) {
               {urgent.length > 0 && (
                 <div className="focusList">
                   <h3>Do these first ({urgent.length})</h3>
-                  {urgent.map((f) => <FocusRow key={f.shop.id} item={f} onDone={markDone} busy={busy === "done"} />)}
+                  <FocusList items={urgent} reload={reload} say={say} />
                 </div>
               )}
               {pushes.length > 0 && (
                 <div className="focusList">
                   <h3>Push these shops ({pushes.length})</h3>
-                  {pushes.slice(0, 8).map((f) => <FocusRow key={f.shop.id} item={f} />)}
+                  <FocusList items={pushes.slice(0, 8)} reload={reload} say={say} />
                 </div>
               )}
               {soon.length > 0 && (
                 <div className="focusList">
                   <h3>Coming up ({soon.length})</h3>
-                  {soon.slice(0, 6).map((f) => <FocusRow key={f.shop.id} item={f} onDone={markDone} busy={busy === "done"} />)}
+                  <FocusList items={soon.slice(0, 8)} reload={reload} say={say} />
                 </div>
               )}
             </>
@@ -434,6 +477,7 @@ export default function Rep({ data, reload, say }) {
                       <small>
                         {s.area || "Area not set"} · {s.orders} orders{s.lastVisit ? " · last visit " + s.lastVisit : ""}
                         {s.next ? ` · ${s.next.step} by ${s.next.due}` : ""}
+                        {shopOwes(s) > 0 ? ` · owes ${money(shopOwes(s))}` : ""}
                       </small>
                     </span>
                     {s.phone && <a className="btn small" href={"tel:" + s.phone}>Call</a>}

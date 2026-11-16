@@ -7,6 +7,8 @@ import { loadSettings, loadVisits, buildBoard, publicUser } from "../lib/data.js
 import { nepal, isDate, weekStart } from "../lib/time.js";
 import { crmEnabled } from "../lib/crm.js";
 import { loadTracks } from "../lib/track.js";
+import { loadProducts } from "../lib/products.js";
+import { settle } from "../lib/sync.js";
 
 export default async function handler(req, res) {
   try {
@@ -17,6 +19,8 @@ export default async function handler(req, res) {
     let to = isDate(req.query.to) ? req.query.to : today;
     if (from > to) [from, to] = [to, from];
 
+    await settle().catch(() => {});
+    const products = await loadProducts().catch(() => ({ list: [], at: 0 }));
     const [users, settings, shops, days] = await Promise.all([
       loadUsers(),
       loadSettings(),
@@ -49,6 +53,8 @@ export default async function handler(req, res) {
       settings,
       users: Object.values(users).map(publicUser),
       shops: Object.values(shops),
+      products: products.list,
+      productsAt: products.at,
       visits,
       days: myDays,
       tracks,
