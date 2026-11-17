@@ -1,11 +1,11 @@
 // The admin screen. The "view only" admin sees the same screens with every
 // change control removed; the server also refuses changes from that account.
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileText, Gauge, MapPinned, Rocket, Search, Settings as Cog, Store, Trash2, Users } from "lucide-react";
+import { Download, FileText, Flame, Gauge, MapPinned, Rocket, Route, UsersRound, Search, Settings as Cog, Store, Trash2, Users } from "lucide-react";
 import { api } from "./api.js";
 import MapView from "./MapView.jsx";
 import { Avatar, Board, VisitRow, VisitFacts, FocusList, fmtDay, PERIODS } from "./ui.jsx";
-import { buildMapData, indexBy, weekStartOf, dayBefore } from "./mapdata.js";
+import { buildMapData, indexBy, weekStartOf, dayBefore, routeStats } from "./mapdata.js";
 import { toRows, downloadCsv, downloadPdf } from "./export.js";
 import { COLORS, OUTCOMES, ROLES, money, scoreboard, focusList, coach, shopOwes, daysBetween } from "../shared/rules.js";
 
@@ -148,24 +148,78 @@ function Filters({ data, reps, person, setPerson, outcome, setOutcome, setRange,
 
 /* ---------- Map tab ---------- */
 function Live(ctx) {
-  const { data, users, shops, visits, person, canEdit, reload, say } = ctx;
+  const { data, users, shops, visits, reps, person, setPerson, canEdit, reload, say } = ctx;
   const [sel, setSel] = useState(null);
+  const [heatOn, setHeatOn] = useState(true);
   const [period, setPeriod] = useState("today");
   const isToday = data.from === data.today && data.to === data.today;
   const mapData = useMemo(() => {
     const days = isToday ? Object.fromEntries(Object.entries(data.days).filter(([e]) => person === "all" || e === person)) : {};
     const shopList = data.shops.filter((s) => person === "all" || s.owner === person);
-    const tracks = data.from === data.to ? Object.fromEntries(Object.entries(data.tracks || {}).filter(([e]) => person === "all" || e === person)) : {};
-    return buildMapData({ visits, shops: shopList, users: data.users, days, tracks });
-  }, [visits, data.shops, data.users, data.days, data.tracks, data.from, data.to, person, isToday]);
+    const mine = (set) => Object.fromEntries(Object.entries(set || {}).filter(([e]) => person === "all" || e === person));
+    const tracks = data.from === data.to ? mine(data.tracks) : {};
+    const trackDays = data.from !== data.to && data.trackDays ? Object.fromEntries(Object.entries(data.trackDays).map(([d, set]) => [d, mine(set)])) : null;
+    return buildMapData({ visits, shops: shopList, users: data.users, days, tracks, trackDays });
+  }, [visits, data.shops, data.users, data.days, data.tracks, data.trackDays, data.from, data.to, person, isToday]);
+  // One person chosen: what their route says about the day.
+  const focus = person !== "all" ? users[person] : null;
+  const travel = useMemo(() => {
+    if (!focus) return null;
+    const lines = data.from === data.to ? [(data.tracks || {})[person]] : Object.values(data.trackDays || {}).map((set) => set[person]);
+    return routeStats(lines.filter(Boolean));
+  }, [focus, person, data.tracks, data.trackDays, data.from, data.to]);
+  const noRoutes = data.from !== data.to && !data.trackDays;
+  const pick = (email) => {
+    setPerson(person === email ? "all" : email);
+    setSel(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const dayOf = focus && isToday ? data.days[person] : null;
   const orders = visits.filter((v) => v.outcome === "order");
   const chosen = sel && visits.find((v) => v.id === sel);
   const many = data.from !== data.to;
 
   return (
     <main className="shell wide">
-      <MapView className="map-admin" {...mapData} selected={sel} onSelect={setSel} />
+      <MapView className="map-admin" {...mapData} showHeat={heatOn} focus={person} selected={sel} onSelect={setSel}>
+        <button type="button" className="map-heat" aria-pressed={heatOn} onClick={() => setHeatOn(!heatOn)}>
+          <Flame size={15} /> Heat
+        </button>
+      </MapView>
       <section className="panel">
+        <div className="card who-card">
+          <div className="people" role="group" aria-label="Whose map">
+            <button aria-pressed={person === "all"} onClick={() => { setPerson("all"); setSel(null); }}>
+              <span className="all"><UsersRound size={16} /></span>
+              Everyone
+            </button>
+            {reps.map((u) => (
+              <button key={u.email} aria-pressed={person === u.email} onClick={() => pick(u.email)}>
+                <Avatar user={u} size={26} />
+                {u.name.split(" ")[0]}
+              </button>
+            ))}
+          </div>
+          {focus && (
+            <div className="travel">
+              <p>
+                <b>{focus.name}</b>
+                <span>
+                  {dayOf ? (dayOf.end ? `Day ended at ${dayOf.end}` : dayOf.start ? `In the field since ${dayOf.start}. Last seen ${dayOf.at || dayOf.start}` : "Has not started the day") : isToday ? "Has not tapped Start day today" : data.from === data.to ? fmtDay(data.from) : `${fmtDay(data.from)} to ${fmtDay(data.to)}`}
+                  {` · ${visits.length} ${visits.length === 1 ? "check-in" : "check-ins"}`}
+                </span>
+              </p>
+              <div className="stats three">
+                <div className="stat"><b>{travel.km} km</b><span>Travelled</span></div>
+                <div className="stat"><b>{travel.first || "-"}</b><span>Route starts</span></div>
+                <div className="stat"><b>{travel.last || "-"}</b><span>Last point</span></div>
+              </div>
+              {!travel.points && <p className="muted small">{noRoutes ? "Routes are shown for one day or up to 7 days. Pick a shorter range." : "No route saved for these dates. The route is recorded by the Android app between Start day and End day, with Location set to Allow all the time."}</p>}
+              <button className="btn" onClick={() => { setPerson("all"); setSel(null); }}><UsersRound size={16} /> Show everyone</button>
+            </div>
+          )}
+          {!focus && <p className="muted small"><Route size={13} /> Tap a name to see only that person's route, heat and check-ins.</p>}
+        </div>
         <div className="card">
           <Filters {...ctx} withOutcome />
           <div className="stats four">
@@ -189,7 +243,7 @@ function Live(ctx) {
               ))}
             </div>
           </div>
-          <Board rows={data.board[period] || []} />
+          <Board rows={data.board[period] || []} onPick={pick} picked={person} />
         </div>
 
         <div className="card">
@@ -723,6 +777,8 @@ function SettingsTab({ data, canEdit, reload, say }) {
   const [daily, setDaily] = useState(data.settings.dailyVisits);
   const [reorder, setReorder] = useState(data.settings.reorderDays);
   const [maxMargin, setMaxMargin] = useState(data.settings.maxMargin);
+  const [routeAccess, setRouteAccess] = useState(data.settings.routeAccess || {});
+  const [tvRoutes, setTvRoutes] = useState(!!data.settings.tvRoutes);
   const [busy, setBusy] = useState(false);
   async function refreshProducts() {
     setBusy(true);
@@ -745,6 +801,8 @@ function SettingsTab({ data, canEdit, reload, say }) {
     setDaily(data.settings.dailyVisits);
     setReorder(data.settings.reorderDays);
     setMaxMargin(data.settings.maxMargin);
+    setRouteAccess(data.settings.routeAccess || {});
+    setTvRoutes(!!data.settings.tvRoutes);
   }, [data.settings]);
 
   async function save(e) {
@@ -752,7 +810,7 @@ function SettingsTab({ data, canEdit, reload, say }) {
     setBusy(true);
     setErr("");
     try {
-      await api.admin("saveSettings", { settings: { points, farMeters: far, dailyVisits: daily, reorderDays: reorder, maxMargin, brands: brands.split(",").map((b) => b.trim()).filter(Boolean) } });
+      await api.admin("saveSettings", { settings: { points, farMeters: far, dailyVisits: daily, reorderDays: reorder, maxMargin, routeAccess, tvRoutes, brands: brands.split(",").map((b) => b.trim()).filter(Boolean) } });
       await reload();
       say("Settings saved. Leaderboards now use the new rules.");
     } catch (e2) {
@@ -802,6 +860,24 @@ function SettingsTab({ data, canEdit, reload, say }) {
               <small>Puts the shop on the focus list.</small>
             </label>
           </div>
+          <div>
+            <h2>Travel map</h2>
+            <p className="muted small">The route a person travelled and the heat map are private. You and view-only accounts always see them. Field users see nothing unless you allow it here.</p>
+          </div>
+          {data.users.filter((u) => u.role === "rep").map((u) => (
+            <label className="field" key={u.email}>
+              {u.name} can see
+              <select value={routeAccess[u.email] || "none"} disabled={!canEdit} onChange={(e) => setRouteAccess({ ...routeAccess, [u.email]: e.target.value })}>
+                <option value="none">No travel routes</option>
+                <option value="own">Only their own route</option>
+                <option value="team">Everyone's routes and live locations</option>
+              </select>
+            </label>
+          ))}
+          <label className="check">
+            <input type="checkbox" checked={tvRoutes} disabled={!canEdit} onChange={(e) => setTvRoutes(e.target.checked)} />
+            <span>Draw travel routes on the office TV</span>
+          </label>
           <h2>Orders</h2>
           <label className="field">
             Highest margin a field user can give a shop, in %

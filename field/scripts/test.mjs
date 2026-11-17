@@ -220,7 +220,7 @@ ok((await call("state", { as: "divash" })).code === 401, "switched-off person is
   ok(st.data.tracks[EMAIL.sajina].length === 2 && st.data.days[EMAIL.sajina].lat === 27.705, "admin sees the route and the live dot moves");
   ok(!("tracks" in st.data) || !st.data.tracks[EMAIL.divash], "no route for someone who is not tracked");
   st = await call("state", { as: "sajina" });
-  ok(Object.keys(st.data.tracks).join() === EMAIL.sajina, "field user only receives their own route");
+  ok(Object.keys(st.data.tracks).length === 0, "a field user is not sent any travel route unless it is granted");
   await call("day", { as: "sajina", method: "POST", body: { action: "end", lat: 27.7, lng: 85.3 } });
   t = await call("track", { method: "POST", bearer: tok, body: { points: [pt(27.8, 85.4, 1)] } });
   ok(t.data.tracking === false && (await store.hget("field:track:" + nepal().date, EMAIL.sajina)).length === 2, "tracking stops at End day");
@@ -263,6 +263,25 @@ ok(r.code === 200 && r.data.visits.length === 1 && !("me" in r.data), "TV feed w
   ok(a.data.visit.time === nepal(new Date(at)).time, "a late check-in keeps the time it really happened");
   const future = await call("visits", { as: "sajina", method: "POST", body: { ...body, clientId: "c-test-2", shopName: undefined, shopId: a.data.shop.id, at: new Date(Date.now() + 86400000).toISOString() } });
   ok(future.code === 200 && future.data.visit.date === nepal().date, "a time in the future is ignored");
+}
+
+// travel routes are private
+{
+  const rep0 = (await call("state", { as: "sajina" })).data;
+  ok(rep0.routes === "none" && Object.keys(rep0.tracks).length === 0, "a field user gets no travel routes by default");
+  ok(Object.keys(rep0.days).every((e) => e.startsWith("sajina")), "a field user gets only their own location");
+  const boss = (await call("state", { as: "mijesh" })).data;
+  const viewer = (await call("state", { as: "bivek" })).data;
+  ok(boss.routes === "team" && viewer.routes === "team", "the admin and the view-only account see all routes");
+  const access = { [rep0.me.email]: "own", "x@y.z": "everything" };
+  const saved = await call("admin", { as: "mijesh", method: "POST", body: { op: "saveSettings", settings: { ...boss.settings, routeAccess: access, tvRoutes: true } } });
+  ok(saved.data.settings.routeAccess[rep0.me.email] === "own" && !saved.data.settings.routeAccess["x@y.z"] && saved.data.settings.tvRoutes === true, "route access is saved and junk levels are dropped");
+  ok((await call("state", { as: "sajina" })).data.routes === "own", "a granted field user can see their own route");
+  ok((await call("admin", { as: "sajina", method: "POST", body: { op: "saveSettings", settings: { routeAccess: { [rep0.me.email]: "team" } } } })).code === 403, "a field user cannot grant themselves access");
+  const week = (await call("state", { as: "mijesh", query: { from: "2026-11-10", to: "2026-11-16" } })).data;
+  const month = (await call("state", { as: "mijesh", query: { from: "2026-10-10", to: "2026-11-16" } })).data;
+  ok(week.trackDays && month.trackDays === null, "routes are loaded for up to 7 days at a time");
+  await call("admin", { as: "mijesh", method: "POST", body: { op: "saveSettings", settings: { ...boss.settings, routeAccess: {}, tvRoutes: false } } });
 }
 
 // the real first day: one tap clears the tests, once

@@ -12,18 +12,26 @@ import { LocateFixed } from "lucide-react";
 const STYLE = import.meta.env.VITE_MAP_STYLE || "https://tiles.openfreemap.org/styles/liberty";
 const KATHMANDU = [85.318, 27.705];
 
+const heatData = (heat) => ({
+  type: "FeatureCollection",
+  features: heat.map((h) => ({ type: "Feature", properties: { w: h[2] }, geometry: { type: "Point", coordinates: [h[0], h[1]] } })),
+});
+
 const routeData = (routes) => ({
   type: "FeatureCollection",
   features: routes.map((r) => ({ type: "Feature", properties: { color: r.color }, geometry: { type: "LineString", coordinates: r.coords } })),
 });
 
-export default function MapView({ pins = [], dots = [], live = [], routes = [], selected, onSelect, className = "" }) {
+export default function MapView({ pins = [], dots = [], live = [], routes = [], heat = [], showHeat = false, focus = "", selected, onSelect, className = "", children }) {
   const box = useRef(null);
   const map = useRef(null);
   const marks = useRef([]);
   const fitted = useRef(false);
   const latestRoutes = useRef(routes);
   latestRoutes.current = routes;
+  const latestHeat = useRef([]);
+  latestHeat.current = showHeat ? heat : [];
+  const lastFocus = useRef(focus);
   const [problem, setProblem] = useState("");
 
   useEffect(() => {
@@ -35,6 +43,20 @@ export default function MapView({ pins = [], dots = [], live = [], routes = [], 
       m.once("load", () => {
         ready = true;
         // Routes sit under the pins: a white edge with the person's colour on top.
+        // Heat: where time was spent. Green is light, gold is busy, red is where they stayed longest.
+        m.addSource("heat", { type: "geojson", data: heatData(latestHeat.current) });
+        m.addLayer({
+          id: "heat",
+          type: "heatmap",
+          source: "heat",
+          paint: {
+            "heatmap-weight": ["get", "w"],
+            "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 10, 0.35, 16, 0.9],
+            "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 10, 10, 14, 22, 17, 38],
+            "heatmap-opacity": 0.72,
+            "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"], 0, "rgba(56,100,91,0)", 0.15, "rgba(56,100,91,0.45)", 0.45, "#7fb069", 0.7, "#f2ab2f", 1, "#d63a40"],
+          },
+        });
         m.addSource("routes", { type: "geojson", data: routeData(latestRoutes.current) });
         const line = { "line-cap": "round", "line-join": "round" };
         m.addLayer({ id: "routes-edge", type: "line", source: "routes", layout: line, paint: { "line-color": "#ffffff", "line-width": 7, "line-opacity": 0.9 } });
@@ -56,7 +78,9 @@ export default function MapView({ pins = [], dots = [], live = [], routes = [], 
 
   function fit(animate) {
     const m = map.current;
-    const pts = [...pins, ...live, ...dots].map((p) => [p.lng, p.lat]);
+    // Shops not visited are left out when there is something that actually happened to frame.
+    const happened = [...pins, ...live].map((p) => [p.lng, p.lat]).concat(...routes.map((r) => r.coords));
+    const pts = happened.length ? happened : dots.map((p) => [p.lng, p.lat]);
     if (!m || !pts.length) return;
     if (pts.length === 1) {
       m.easeTo({ center: pts[0], zoom: 15, duration: animate ? 600 : 0 });
@@ -64,7 +88,8 @@ export default function MapView({ pins = [], dots = [], live = [], routes = [], 
     }
     const b = new maplibregl.LngLatBounds();
     pts.forEach((p) => b.extend(p));
-    m.fitBounds(b, { padding: 56, maxZoom: 15.5, duration: animate ? 600 : 0 });
+    m.resize();
+    m.fitBounds(b, { padding: { top: 84, right: 110, bottom: 60, left: 48 }, maxZoom: 15.5, duration: animate ? 600 : 0 });
   }
 
   const routeSignature = JSON.stringify(routes);
@@ -73,6 +98,13 @@ export default function MapView({ pins = [], dots = [], live = [], routes = [], 
     if (src) src.setData(routeData(routes));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeSignature]);
+
+  const heatSignature = showHeat ? heat.length + ":" + JSON.stringify(heat.slice(-3)) : "off";
+  useEffect(() => {
+    const src = map.current && map.current.getSource && map.current.getSource("heat");
+    if (src) src.setData(heatData(showHeat ? heat : []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heatSignature]);
 
   const signature = JSON.stringify([pins, dots, live, selected]);
   useEffect(() => {
@@ -122,10 +154,15 @@ export default function MapView({ pins = [], dots = [], live = [], routes = [], 
       fitted.current = true;
       fit(false);
     }
+    // Choosing one person, or going back to everyone, reframes the map around them.
+    if (lastFocus.current !== focus) {
+      lastFocus.current = focus;
+      fit(true);
+    }
     const chosen = pins.find((p) => p.id === selected);
     if (chosen) m.easeTo({ center: [chosen.lng, chosen.lat], zoom: Math.max(m.getZoom(), 14.5), duration: 500 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature]);
+  }, [signature, focus]);
 
   return (
     <div className={"map " + className}>
@@ -133,6 +170,7 @@ export default function MapView({ pins = [], dots = [], live = [], routes = [], 
       <button type="button" className="map-fit" onClick={() => fit(true)} aria-label="Show everything on the map">
         <LocateFixed size={18} />
       </button>
+      {children}
       {problem && <p className="map-problem">{problem}</p>}
     </div>
   );

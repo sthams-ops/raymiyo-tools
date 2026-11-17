@@ -40,7 +40,7 @@ export default async function handler(req, res) {
       shops: Object.values(shops).map((s) => ({ id: s.id, name: s.name, area: s.area, lat: s.lat, lng: s.lng, active: s.active })),
       visits: all.filter((v) => v.date === today),
       days,
-      tracks,
+      tracks: settings.tvRoutes ? tracks : {},
       board: buildBoard(all, users, settings.points, today),
     });
   } catch (e) {

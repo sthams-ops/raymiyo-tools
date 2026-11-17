@@ -10,7 +10,32 @@ export function weekStartOf(date) {
   return d.toISOString().slice(0, 10);
 }
 
-export function buildMapData({ visits, shops, users, days, tracks, showShops = true }) {
+const clock = (sec) => new Date(sec * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kathmandu" });
+const metres = (a, b) => {
+  const rad = Math.PI / 180;
+  const x = (b[1] - a[1]) * rad * Math.cos(((a[0] + b[0]) / 2) * rad);
+  const y = (b[0] - a[0]) * rad;
+  return Math.sqrt(x * x + y * y) * 6371000;
+};
+
+// Distance and times for one person's saved route lines ([[lat, lng, seconds], ...] per day).
+export function routeStats(lines) {
+  let m = 0;
+  let first = 0;
+  let last = 0;
+  let points = 0;
+  for (const line of lines) {
+    if (!Array.isArray(line) || !line.length) continue;
+    points += line.length;
+    for (let i = 1; i < line.length; i++) m += metres(line[i - 1], line[i]);
+    if (!first || line[0][2] < first) first = line[0][2];
+    if (line[line.length - 1][2] > last) last = line[line.length - 1][2];
+  }
+  return { km: Math.round(m / 100) / 10, first: first ? clock(first) : "", last: last ? clock(last) : "", points };
+}
+
+// tracks: one day { email: line }. trackDays: several days { date: { email: line } }.
+export function buildMapData({ visits, shops, users, days, tracks, trackDays, showShops = true }) {
   const people = indexBy(users, "email");
   const shopsById = indexBy(shops, "id");
   const pins = visits.map((v) => {
@@ -43,10 +68,23 @@ export function buildMapData({ visits, shops, users, days, tracks, showShops = t
       label: `${firstName(people[email])} ${d.at}${d.end ? " · day ended" : ""}`,
     }));
   // Routes travelled (Android app live tracking), one coloured line per person.
-  const routes = Object.entries(tracks || {})
-    .filter(([email, line]) => people[email] && Array.isArray(line) && line.length > 1)
-    .map(([email, line]) => ({ key: email, color: people[email].color, coords: line.map((p) => [p[1], p[0]]) }));
-  return { pins, dots, live, routes };
+  const sets = trackDays ? Object.entries(trackDays) : [["", tracks || {}]];
+  const routes = [];
+  const heat = [];
+  for (const [date, set] of sets) {
+    for (const [email, line] of Object.entries(set || {})) {
+      if (!people[email] || !Array.isArray(line)) continue;
+      if (line.length > 1) routes.push({ key: email + date, color: people[email].color, coords: line.map((p) => [p[1], p[0]]) });
+      // Heat follows time, not distance: a point passed while walking is faint,
+      // minutes spent in one place add up and glow.
+      for (let i = 0; i < line.length; i++) {
+        const stay = i + 1 < line.length ? line[i + 1][2] - line[i][2] : 60;
+        heat.push([line[i][1], line[i][0], Math.min(1.5, Math.max(0.06, stay / 120))]);
+      }
+    }
+  }
+  for (const v of visits) if (Number.isFinite(v.lat) && Number.isFinite(v.lng)) heat.push([v.lng, v.lat, 2]);
+  return { pins, dots, live, routes, heat };
 }
 
 // The day before a "2026-11-16" style date.

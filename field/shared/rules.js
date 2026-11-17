@@ -33,6 +33,10 @@ export const DEFAULT_SETTINGS = {
   dailyVisits: 12,
   reorderDays: 14,
   maxMargin: 30,
+  // Travel routes are private: the admin and view-only accounts always see them.
+  // A field user sees none unless listed here as "own" (their own route) or "team" (everyone's).
+  routeAccess: {},
+  tvRoutes: false, // draw routes on the office TV
 };
 
 export function normalizeSettings(saved) {
@@ -48,7 +52,13 @@ export function normalizeSettings(saved) {
     const n = Math.round(Number(v));
     return Number.isFinite(n) && v !== "" && v != null ? Math.min(hi, Math.max(lo, n)) : d;
   };
+  const routeAccess = {};
+  for (const [email, level] of Object.entries(s.routeAccess && typeof s.routeAccess === "object" ? s.routeAccess : {}).slice(0, 200)) {
+    if (level === "own" || level === "team") routeAccess[String(email).toLowerCase().slice(0, 120)] = level;
+  }
   return {
+    routeAccess,
+    tvRoutes: s.tvRoutes === true,
     dailyVisits: whole(s.dailyVisits, 1, 100, DEFAULT_SETTINGS.dailyVisits),
     reorderDays: whole(s.reorderDays, 3, 120, DEFAULT_SETTINGS.reorderDays),
     maxMargin: whole(s.maxMargin, 0, 90, DEFAULT_SETTINGS.maxMargin),

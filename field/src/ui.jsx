@@ -196,13 +196,22 @@ export function fmtDay(date) {
 export const firstName = (user) => ((user && user.name) || "").split(" ")[0] || "Someone";
 
 // Leaderboard. rows come from the server already sorted.
-export function Board({ rows, big }) {
+// onPick makes each row a button (the admin map uses it to show one person); picked is the chosen email.
+export function Board({ rows, big, onPick, picked }) {
   if (!rows || !rows.length) return <p className="muted">No field users on the team yet.</p>;
   const max = Math.max(1, ...rows.map((r) => r.points));
   return (
     <ol className={"board" + (big ? " big" : "")}>
       {rows.map((r, i) => (
-        <li key={r.email}>
+        <li
+          key={r.email}
+          className={(onPick ? "tap" : "") + (picked === r.email ? " on" : "")}
+          role={onPick ? "button" : undefined}
+          tabIndex={onPick ? 0 : undefined}
+          aria-pressed={onPick ? picked === r.email : undefined}
+          onClick={onPick ? () => onPick(r.email) : undefined}
+          onKeyDown={onPick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(r.email); } } : undefined}
+        >
           <span className={"rank" + (i === 0 && r.points > 0 ? " lead" : "")}>{i + 1}</span>
           <div className="who">
             <b>
