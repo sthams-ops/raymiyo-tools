@@ -12,6 +12,76 @@ import { LocateFixed } from "lucide-react";
 const STYLE = import.meta.env.VITE_MAP_STYLE || "https://tiles.openfreemap.org/styles/liberty";
 const KATHMANDU = [85.318, 27.705];
 
+// Places on the map. The free map tiles already hold the names of shops, pharmacies,
+// hospitals, schools, temples and so on (from OpenStreetMap); the stock style only
+// shows them when zoomed far in. These settings bring them out two zoom levels earlier
+// and pick out the places we sell to in their own colours.
+const HEALTH = ["pharmacy", "chemist", "hospital", "clinic", "doctors", "dentist", "medical_supply", "nursing_home"];
+const SHOPS = ["supermarket", "convenience", "department_store", "general", "wholesale", "baby_goods", "kiosk", "mall", "marketplace", "variety_store", "cosmetics", "grocery", "greengrocer"];
+const kind = ["case", ["in", ["get", "subclass"], ["literal", HEALTH]], "health", ["in", ["get", "subclass"], ["literal", SHOPS]], "shop", "other"];
+const NAME = ["coalesce", ["get", "name_en"], ["get", "name:latin"], ["get", "name"]];
+export const PLACE_LAYERS = [
+  {
+    id: "biz-dot",
+    type: "circle",
+    source: "openmaptiles",
+    "source-layer": "poi",
+    minzoom: 12.5,
+    filter: ["in", ["get", "subclass"], ["literal", [...HEALTH, ...SHOPS]]],
+    paint: {
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 12.5, 2.5, 15, 5, 18, 7],
+      "circle-color": ["match", kind, "health", "#d63a40", "#2563eb"],
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": 1.5,
+    },
+  },
+  {
+    id: "biz-label",
+    type: "symbol",
+    source: "openmaptiles",
+    "source-layer": "poi",
+    minzoom: 14,
+    filter: ["all", ["in", ["get", "subclass"], ["literal", [...HEALTH, ...SHOPS]]], ["has", "name"]],
+    layout: {
+      "text-field": NAME,
+      "text-font": ["Noto Sans Bold"],
+      "text-size": ["interpolate", ["linear"], ["zoom"], 14, 10.5, 17, 13],
+      "text-anchor": "top",
+      "text-offset": [0, 0.55],
+      "text-max-width": 8,
+      "symbol-sort-key": ["match", kind, "health", 0, 1],
+    },
+    paint: {
+      "text-color": ["match", kind, "health", "#a31d24", "#1e40af"],
+      "text-halo-color": "#ffffff",
+      "text-halo-width": 1.6,
+    },
+  },
+];
+// Stock place layers and the zoom they now start at.
+const EARLIER = { poi_r1: 13, poi_r7: 14, poi_r20: 15 };
+
+function showPlaces(m) {
+  for (const [id, zoom] of Object.entries(EARLIER)) {
+    try {
+      if (!m.getLayer(id)) continue;
+      m.setLayerZoomRange(id, zoom, 24);
+      m.setLayoutProperty(id, "text-font", ["Noto Sans Regular"]);
+      m.setPaintProperty(id, "text-color", "#3d4f49");
+      m.setPaintProperty(id, "text-halo-width", 1.4);
+    } catch {}
+  }
+  try {
+    if (m.getSource("openmaptiles")) for (const layer of PLACE_LAYERS) if (!m.getLayer(layer.id)) m.addLayer(layer);
+  } catch {}
+}
+
+// The live marker: a rider badge in the person's colour, with their initial and the company mark.
+const RIDER =
+  '<svg viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<circle cx="7.5" cy="22" r="4.2"/><circle cx="24.5" cy="22" r="4.2"/>' +
+  '<path d="M7.5 22l4.2-8.5h7.6l5.2 8.5"/><path d="M12 22h7.5l2.6-9.5"/><path d="M18.5 8.5h3.6l1.4 4"/><path d="M9.5 13.5h6"/></svg>';
+
 const heatData = (heat) => ({
   type: "FeatureCollection",
   features: heat.map((h) => ({ type: "Feature", properties: { w: h[2] }, geometry: { type: "Point", coordinates: [h[0], h[1]] } })),
@@ -22,7 +92,7 @@ const routeData = (routes) => ({
   features: routes.map((r) => ({ type: "Feature", properties: { color: r.color }, geometry: { type: "LineString", coordinates: r.coords } })),
 });
 
-export default function MapView({ pins = [], dots = [], live = [], routes = [], heat = [], showHeat = false, focus = "", selected, onSelect, className = "", children }) {
+export default function MapView({ pins = [], dots = [], live = [], routes = [], heat = [], showHeat = false, focus = "", legend = false, selected, onSelect, className = "", children }) {
   const box = useRef(null);
   const map = useRef(null);
   const marks = useRef([]);
@@ -42,6 +112,7 @@ export default function MapView({ pins = [], dots = [], live = [], routes = [], 
       m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
       m.once("load", () => {
         ready = true;
+        showPlaces(m);
         // Routes sit under the pins: a white edge with the person's colour on top.
         // Heat: where time was spent. Green is light, gold is busy, red is where they stayed longest.
         m.addSource("heat", { type: "geojson", data: heatData(latestHeat.current) });
@@ -143,11 +214,13 @@ export default function MapView({ pins = [], dots = [], live = [], routes = [], 
       const el = document.createElement("div");
       el.className = "map-live";
       el.style.setProperty("--rep", l.color);
-      el.innerHTML = "<span class='pulse'></span><span class='face'></span><span class='tag'></span>";
-      el.querySelector(".face").textContent = l.initial;
+      if (/day ended/.test(l.label)) el.className += " off";
+      el.innerHTML = `<span class='pulse'></span><span class='face'>${RIDER}</span><b class='ini'></b><img class='logo' src='/brand/raymiyo-mark.png' alt='' /><span class='tag'></span>`;
+      el.querySelector(".ini").textContent = l.initial;
       el.querySelector(".tag").textContent = l.label;
+      el.title = l.label;
       // Sits up and to the right so it never hides the pin of the last check-in.
-      add(el, l, { offset: [26, -34] });
+      add(el, l, { offset: [28, -36] });
     });
 
     if (!fitted.current && (pins.length || live.length || dots.length)) {
@@ -170,6 +243,12 @@ export default function MapView({ pins = [], dots = [], live = [], routes = [], 
       <button type="button" className="map-fit" onClick={() => fit(true)} aria-label="Show everything on the map">
         <LocateFixed size={18} />
       </button>
+      {legend && (
+        <p className="map-legend">
+          <i style={{ background: "#d63a40" }} /> Pharmacy, clinic
+          <i style={{ background: "#2563eb" }} /> Shop
+        </p>
+      )}
       {children}
       {problem && <p className="map-problem">{problem}</p>}
     </div>

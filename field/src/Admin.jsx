@@ -181,7 +181,7 @@ function Live(ctx) {
 
   return (
     <main className="shell wide">
-      <MapView className="map-admin" {...mapData} showHeat={heatOn} focus={person} selected={sel} onSelect={setSel}>
+      <MapView className="map-admin" legend {...mapData} showHeat={heatOn} focus={person} selected={sel} onSelect={setSel}>
         <button type="button" className="map-heat" aria-pressed={heatOn} onClick={() => setHeatOn(!heatOn)}>
           <Flame size={15} /> Heat
         </button>
