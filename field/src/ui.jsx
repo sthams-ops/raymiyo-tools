@@ -101,6 +101,7 @@ function FocusRow({ item, owner, canAct, held, act, open, setOpen, busy, err }) 
       </p>
       {owes > 0 && item.kind !== "collect" && item.kind !== "cheque" && <p className="owes">Owes {money(owes)}</p>}
       {held && <p className="small"><span className="tag lv-today">Waiting to send</span></p>}
+      {s.contact && s.contact.name && <p className="small">Ask for {s.contact.name} ({s.contact.role || "Owner"})</p>}
       {s.lastNote && !item.due_ && <p className="quote">“{s.lastNote}”</p>}
       {!paying && (
         <div className="focusActs">
@@ -312,6 +313,8 @@ export function VisitFacts({ v, shop, user, points }) {
           <dd>{v.brands.join(", ")}</dd>
         </>
       )}
+      <dt>Talked to</dt>
+      <dd>{v.contact ? `${v.contact}${v.contactRole ? " (" + v.contactRole + ")" : ""}` : "Not recorded"}</dd>
       <dt>Note</dt>
       <dd>{v.note || "No note"}</dd>
       <dt>Location</dt>

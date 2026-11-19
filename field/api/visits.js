@@ -8,7 +8,7 @@ import { loadSettings, stageFor } from "../lib/data.js";
 import { when, nepal, addDays, isDate } from "../lib/time.js";
 import { syncVisit, cancelVisit } from "../lib/crm.js";
 import { replay } from "../lib/idem.js";
-import { OUTCOMES, NEXT_STEPS, distanceMeters, visitPoints, phoneKey, findDuplicate, orderTotals } from "../shared/rules.js";
+import { OUTCOMES, NEXT_STEPS, CONTACT_ROLES, distanceMeters, visitPoints, phoneKey, findDuplicate, orderTotals } from "../shared/rules.js";
 import { loadProducts } from "../lib/products.js";
 
 const TERMS = ["Cash", "Credit (Cheque)"];
@@ -64,6 +64,13 @@ function setNext(shop, visit) {
   shop.next = visit.nextStep && visit.nextStep !== "No action" && visit.followUp ? { step: visit.nextStep, due: visit.followUp, visitId: visit.id, amount: visit.value || 0 } : null;
   shop.lastOutcome = visit.outcome;
   shop.lastNote = (visit.note || "").slice(0, 140);
+  if (visit.contact) shop.contact = { name: visit.contact, role: visit.contactRole || "Owner" };
+}
+
+// The person at the shop: a name and whether they are the owner or staff.
+function readContact(b) {
+  const name = clean(b.contact, 60);
+  return { contact: name, contactRole: name ? (CONTACT_ROLES.includes(b.contactRole) ? b.contactRole : "Owner") : "" };
 }
 
 async function pushToCrm(key, visit, shop, user, settings, doneCrmId = "") {
@@ -170,6 +177,7 @@ async function create(req, res) {
     terms: order.terms,
     ...(order.items ? { items: order.items, margin: order.margin, subtotal: order.subtotal, discount: order.discount } : {}),
     brands,
+    ...readContact(b),
     note: clean(b.note, 500),
     photo,
     lat,
@@ -242,6 +250,7 @@ async function update(req, res) {
   visit.value = order.value;
   visit.terms = order.terms;
   visit.note = clean(b.note, 500);
+  if (b.contact !== undefined) Object.assign(visit, readContact(b));
   visit.editedBy = me.email;
   Object.assign(visit, followUp(visit.outcome, visit.date, visit.followUp));
   if (shop) {

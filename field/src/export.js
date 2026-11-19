@@ -11,6 +11,7 @@ export function toRows(visits, shops, users, points) {
       time: v.time,
       person: u ? u.name : v.rep,
       shop: s ? s.name : v.shopName,
+      contact: v.contact ? `${v.contact}${v.contactRole ? " (" + v.contactRole + ")" : ""}` : "",
       area: (s && s.area) || v.area || "",
       type: s ? s.type : "",
       outcome: OUTCOMES[v.outcome] || v.outcome,
@@ -38,8 +39,8 @@ function save(blob, name) {
 }
 
 export function downloadCsv(rows, name) {
-  const cols = ["date", "time", "person", "shop", "area", "type", "outcome", "value", "terms", "brands", "note", "next", "followUp", "points", "gps", "far"];
-  const head = ["Date", "Time", "Person", "Shop", "Area", "Shop type", "Outcome", "Order (Rs)", "Payment", "Brands on shelf", "Note", "Next step", "Follow up on", "Points", "GPS", "Far from shop"];
+  const cols = ["date", "time", "person", "shop", "contact", "area", "type", "outcome", "value", "terms", "brands", "note", "next", "followUp", "points", "gps", "far"];
+  const head = ["Date", "Time", "Person", "Shop", "Talked to", "Area", "Shop type", "Outcome", "Order (Rs)", "Payment", "Brands on shelf", "Note", "Next step", "Follow up on", "Points", "GPS", "Far from shop"];
   const cell = (x) => `"${String(x == null ? "" : x).replace(/"/g, '""')}"`;
   const text = [head.map(cell).join(","), ...rows.map((r) => cols.map((c) => cell(r[c])).join(","))].join("\r\n");
   save(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }), name);
@@ -83,12 +84,12 @@ export async function downloadPdf({ rows, summary, filterLine, name }) {
 
   autoTable(doc, {
     startY: doc.lastAutoTable.finalY + 18,
-    head: [["Date", "Time", "Person", "Shop", "Area", "Outcome", "Order (Rs)", "Payment", "Brands", "Note", "Pts"]],
-    body: rows.map((r) => [r.date, r.time, r.person, r.shop, r.area, r.outcome, r.value ? r.value.toLocaleString("en-IN") : "", r.terms, r.brands, r.note, r.points]),
+    head: [["Date", "Time", "Person", "Shop", "Talked to", "Area", "Outcome", "Order (Rs)", "Payment", "Brands", "Note", "Pts"]],
+    body: rows.map((r) => [r.date, r.time, r.person, r.shop, r.contact, r.area, r.outcome, r.value ? r.value.toLocaleString("en-IN") : "", r.terms, r.brands, r.note, r.points]),
     theme: "striped",
     styles: { fontSize: 8, cellPadding: 4, overflow: "linebreak" },
     headStyles: { fillColor: orange },
-    columnStyles: { 0: { cellWidth: 54 }, 1: { cellWidth: 34 }, 6: { halign: "right", cellWidth: 56 }, 9: { cellWidth: 190 }, 10: { halign: "right", cellWidth: 26 } },
+    columnStyles: { 0: { cellWidth: 54 }, 1: { cellWidth: 34 }, 7: { halign: "right", cellWidth: 56 }, 10: { cellWidth: 150 }, 11: { halign: "right", cellWidth: 26 } },
     margin: { left: 40, right: 40 },
     didDrawPage: () => {
       doc.setFontSize(8);

@@ -2,6 +2,9 @@
 // Points and brands here are only the starting values: the admin changes
 // them inside the app (Settings tab) and the saved values win.
 
+// Who the field user spoke to at the shop.
+export const CONTACT_ROLES = ["Owner", "Staff", "Manager"];
+
 export const OUTCOMES = {
   order: "Order taken",
   interested: "Interested",

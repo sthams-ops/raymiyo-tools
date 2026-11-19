@@ -50,10 +50,12 @@ let r = await call("visits", { as: "divash", method: "POST", body: { shopName: "
 ok(r.code === 400, "check-in without GPS is refused");
 r = await call("visits", { as: "divash", method: "POST", body: { shopName: "Test Kirana", shopType: "Retailer", area: "Kalimati", outcome: "order", value: 0, ...KALIMATI } });
 ok(r.code === 400, "order needs an amount");
-r = await call("visits", { as: "divash", method: "POST", body: { shopName: "Test Kirana", shopType: "Retailer", area: "Kalimati", outcome: "order", value: 8400, terms: "Cash", brands: ["Chicool", "Made up"], note: "  two   cartons ", phone: "+977 9811111111", ...KALIMATI } });
+r = await call("visits", { as: "divash", method: "POST", body: { shopName: "Test Kirana", shopType: "Retailer", area: "Kalimati", outcome: "order", value: 8400, terms: "Cash", brands: ["Chicool", "Made up"], note: "  two   cartons ", contact: "  Ram  Shrestha ", contactRole: "Boss", phone: "+977 9811111111", ...KALIMATI } });
 const noPhone = await call("visits", { as: "divash", method: "POST", body: { shopName: "No Phone Shop", outcome: "no", ...KALIMATI } });
 ok(r.code === 200 && r.data.visit.newShop && r.data.visit.first, "new shop with a first order saves");
 ok(r.data.visit.brands.join() === "Chicool" && r.data.visit.note === "two cartons", "brands and note are cleaned");
+ok(r.data.visit.contact === "Ram Shrestha" && r.data.visit.contactRole === "Owner", "person talked to is saved, unknown role falls back to Owner");
+ok(r.data.shop.contact && r.data.shop.contact.name === "Ram Shrestha", "shop remembers who to ask for next time");
 ok(r.data.shop.stage === "First Order" && r.data.shop.orders === 1 && r.data.shop.owner === EMAIL.divash, "shop stage and owner set");
 ok(noPhone.code === 400, "new shop without a phone number is refused");
 ok(r.data.shop.phone === "9811111111", "phone is saved as digits without the country code");

@@ -285,7 +285,7 @@ function VisitCard({ v, shop, user, data, canEdit, reload, say, close }) {
     }
   }
   const saveEdit = async () => {
-    const ok = await run(() => api.updateVisit({ id: v.id, outcome: edit.outcome, value: Number(String(edit.value || "").replace(/[^0-9]/g, "")), terms: edit.terms, note: edit.note }), "Check-in updated.");
+    const ok = await run(() => api.updateVisit({ id: v.id, outcome: edit.outcome, value: Number(String(edit.value || "").replace(/[^0-9]/g, "")), terms: edit.terms, contact: edit.contact, contactRole: edit.contactRole, note: edit.note }), "Check-in updated.");
     if (ok) setEdit(null);
   };
   const remove = async () => {
@@ -322,6 +322,20 @@ function VisitCard({ v, shop, user, data, canEdit, reload, say, close }) {
               </label>
             </div>
           )}
+          <div className="two">
+            <label className="field">
+              Talked to
+              <input value={edit.contact} maxLength={60} onChange={(e) => setEdit({ ...edit, contact: e.target.value })} />
+            </label>
+            <label className="field">
+              Their role
+              <select value={edit.contactRole} onChange={(e) => setEdit({ ...edit, contactRole: e.target.value })}>
+                <option>Owner</option>
+                <option>Staff</option>
+                <option>Manager</option>
+              </select>
+            </label>
+          </div>
           <label className="field">
             Note
             <textarea value={edit.note} maxLength={500} onChange={(e) => setEdit({ ...edit, note: e.target.value })} />
@@ -343,7 +357,7 @@ function VisitCard({ v, shop, user, data, canEdit, reload, say, close }) {
             </>
           ) : (
             <>
-              <button className="btn" onClick={() => setEdit({ outcome: v.outcome, value: v.value || "", terms: v.terms || "Cash", note: v.note || "" })}>Edit</button>
+              <button className="btn" onClick={() => setEdit({ outcome: v.outcome, value: v.value || "", terms: v.terms || "Cash", contact: v.contact || "", contactRole: v.contactRole || "Owner", note: v.note || "" })}>Edit</button>
               <button className="btn danger" onClick={() => setConfirmDelete(true)}><Trash2 size={15} /> Delete</button>
             </>
           )}

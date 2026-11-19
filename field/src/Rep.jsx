@@ -8,7 +8,7 @@ import MapView from "./MapView.jsx";
 import { Board, VisitRow, VisitFacts, FocusList, firstName, PERIODS } from "./ui.jsx";
 import { buildMapData, indexBy } from "./mapdata.js";
 import { isAndroidApp, startTracking, stopTracking } from "./tracking.js";
-import { OUTCOMES, distanceMeters, visitPoints, focusList, findDuplicate, phoneKey, orderTotals, shopOwes, money } from "../shared/rules.js";
+import { CONTACT_ROLES, OUTCOMES, distanceMeters, visitPoints, focusList, findDuplicate, phoneKey, orderTotals, shopOwes, money } from "../shared/rules.js";
 
 const fmtDist = (m) => (m < 1000 ? m + " m" : (m / 1000).toFixed(1) + " km");
 
@@ -111,7 +111,9 @@ export default function Rep({ data, reload, say, waiting = [] }) {
       }
       setBusy("");
     }
-    set({ shopId: shop.id, isNew: false });
+    // The person they spoke to last time is filled in, so a regular shop is one tap.
+    const c = shop.contact || {};
+    set({ shopId: shop.id, isNew: false, contact: c.name || "", contactRole: c.role || "Owner" });
     setStep("log");
   }
 
@@ -119,12 +121,13 @@ export default function Rep({ data, reload, say, waiting = [] }) {
     if (!(draft.newName || "").trim()) return setErr("Type the shop name first.");
     if (!phoneKey(draft.newPhone)) return setErr("Add the shop's phone number. Ask the owner if it is not on the signboard.");
     if (twin) return setErr(twin.shop.active === false ? `${twin.shop.name} is already saved but archived. Tap "Restore and use this shop".` : `${twin.shop.name} is already saved. Tap "Use this shop".`);
-    set({ isNew: true, shopId: null });
+    set({ isNew: true, shopId: null, contact: draft.contact || "", contactRole: draft.contactRole || "Owner" });
     setStep("log");
   }
 
   async function save() {
     if (!draft.outcome) return setErr("Pick what happened at the shop.");
+    if (draft.outcome !== "absent" && (draft.contact || "").trim().length < 2) return setErr("Type the name of the person you talked to.");
     const value = Number(String(draft.value || "").replace(/[^0-9]/g, ""));
     const hasList = data.products.length > 0;
     const items = Object.entries(draft.qty || {}).map(([id, qty]) => ({ id, qty: Number(qty) })).filter((i) => i.qty > 0);
@@ -155,6 +158,8 @@ export default function Rep({ data, reload, say, waiting = [] }) {
           margin: draft.margin === undefined || draft.margin === "" ? undefined : Number(draft.margin),
           terms: draft.terms || "Cash",
           brands: draft.brands || [],
+          contact: (draft.contact || "").trim(),
+          contactRole: draft.contactRole || "Owner",
           note: draft.note || "",
           followUp: draft.followUp || "",
           lat: pos.lat,
@@ -290,6 +295,19 @@ export default function Rep({ data, reload, say, waiting = [] }) {
                 <small>This shop has no number saved yet. Ask the owner.</small>
               </label>
             )}
+            <div>
+              <h3>Who did you talk to?{draft.outcome === "absent" ? " (optional)" : ""}</h3>
+              <label className="field">
+                <input value={draft.contact || ""} onChange={(e) => set({ contact: e.target.value })} placeholder="Their name, e.g. Ram Shrestha" maxLength={60} autoComplete="off" autoCapitalize="words" aria-label="Name of the person you talked to" />
+              </label>
+              <div className="chips" role="group" aria-label="Their role" style={{ marginTop: 10 }}>
+                {CONTACT_ROLES.map((r) => (
+                  <button key={r} className="chip" aria-pressed={(draft.contactRole || "Owner") === r} onClick={() => set({ contactRole: r })}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div>
               <h3>What happened?</h3>
               <div className="chips" role="group" aria-label="Outcome">
