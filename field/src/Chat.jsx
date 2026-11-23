@@ -9,6 +9,7 @@ import { api } from "./api.js";
 import { Avatar, firstName } from "./ui.jsx";
 import { ROLES } from "../shared/rules.js";
 import { playSent, playReceived, unlockSound } from "./sound.js";
+import { startPush, clearNotices } from "./push.js";
 
 // Other screens use these to point the chat at a person.
 export const chatTarget = (email) => window.dispatchEvent(new CustomEvent("field:chat-target", { detail: { email: email || null } }));
@@ -95,10 +96,14 @@ export default function Chat({ me, users }) {
     [me.email]
   );
 
-  const markRead = useCallback((other) => {
-    setThreads((ts) => ts.map((t) => (t.with === other ? { ...t, unread: 0 } : t)));
-    api.chatRead(other).catch(() => {});
-  }, []);
+  const markRead = useCallback(
+    (other) => {
+      setThreads((ts) => ts.map((t) => (t.with === other ? { ...t, unread: 0 } : t)));
+      api.chatRead(other).catch(() => {});
+      clearNotices(pairOf(me.email, other));
+    },
+    [me.email]
+  );
 
   const viewing = useCallback(
     (pair) => {
@@ -129,7 +134,7 @@ export default function Chat({ me, users }) {
         return [next, ...ts.filter((t) => t.pair !== pair)];
       });
       if (incoming) {
-        playReceived();
+        if (document.visibilityState === "visible") playReceived();
         if (seeing) markRead(other);
         else if (!state.current.open) {
           setPeek({ from: msg.from, text: msg.text });
@@ -240,6 +245,7 @@ export default function Chat({ me, users }) {
         setView({ kind: "list" });
       } else if (depth === 1) setView({ kind: "list" });
     };
+    startPush((email) => openPanel(email));
     const onTarget = (e) => setTarget(e.detail.email);
     const onOpen = (e) => openPanel(e.detail.email);
     window.addEventListener("popstate", onPop);
@@ -262,6 +268,10 @@ export default function Chat({ me, users }) {
   useEffect(() => {
     const base = document.title.replace(/^\(\d+\)\s*/, "");
     document.title = unread ? `(${unread}) ${base}` : base;
+    try {
+      if (unread && navigator.setAppBadge) navigator.setAppBadge(unread).catch(() => {});
+      else if (!unread && navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
+    } catch {}
   }, [unread]);
 
   async function send(other, text, retryOf) {

@@ -50,4 +50,5 @@ export const api = {
   chatMessages: (q) => call("/api/chat?op=messages&" + new URLSearchParams(q).toString()),
   chatSend: (to, text, id) => send("POST", "/api/chat", { op: "send", to, text, id }),
   chatRead: (who) => send("POST", "/api/chat", { op: "read", with: who }),
+  chatPush: (token, remove) => send("POST", "/api/chat", { op: "push", token, remove: !!remove }),
 };

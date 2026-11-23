@@ -5,6 +5,7 @@
 //   GET  ?op=stream                  live events (Server-Sent Events)
 //   POST { op: "send", to, text, id }
 //   POST { op: "read", with }
+//   POST { op: "push", token, remove }   this phone's Firebase token, for notifications when the app is closed
 // Messages are never deleted. Only the owner account can read conversations
 // it is not part of; nobody else can, including view-only admins.
 //
@@ -15,6 +16,7 @@
 import { store } from "../lib/store.js";
 import { guard, readBody, fail, loadUsers, rid, OWNER } from "../lib/auth.js";
 import { publish, listen } from "../lib/bus.js";
+import { pushTo, savePushToken, dropPushToken } from "../lib/push.js";
 
 const THREADS = "field:chat:threads";
 const STATE = "field:chat:state";
@@ -143,19 +145,28 @@ export default async function handler(req, res) {
         thread.last = { id, from: me.email, text: text.slice(0, 140), at };
         await store.hset(THREADS, pair, thread);
         const theirs = await stateOf(to.email, pair);
-        await store.hset(STATE, `${to.email}>${pair}`, { ...theirs, unread: (theirs.unread || 0) + 1 });
+        const unread = (theirs.unread || 0) + 1;
+        await store.hset(STATE, `${to.email}>${pair}`, { ...theirs, unread });
         const mineState = await stateOf(me.email, pair);
         await store.hset(STATE, `${me.email}>${pair}`, { ...mineState, seen: at });
-        return saved;
+        return { ...saved, unread };
       });
 
-      if (!msg.duplicate) {
-        const event = { type: "message", pair, msg };
+      const { duplicate, unread, ...clean } = msg;
+      if (!duplicate) {
+        const event = { type: "message", pair, msg: clean };
         publish(me.email, event);
         publish(to.email, event);
         if (OWNER !== me.email && OWNER !== to.email) publish(OWNER, { ...event, watch: true });
+        // The phone rings even when the app is closed. A failure here never stops the message.
+        await pushTo(to.email, {
+          title: unread > 1 ? `${me.name} (${unread} messages)` : me.name,
+          body: text.length > 300 ? text.slice(0, 297) + "…" : text,
+          tag: pair,
+          count: unread,
+          data: { type: "chat", from: me.email, pair },
+        }).catch((e) => console.error("Push failed", e.message));
       }
-      const { duplicate, ...clean } = msg;
       return res.json({ msg: clean });
     }
 
@@ -172,6 +183,15 @@ export default async function handler(req, res) {
       const event = { type: "read", pair, by: me.email, at };
       publish(other, event);
       publish(me.email, event);
+      return res.json({ ok: true });
+    }
+
+    if (req.method === "POST" && op === "push") {
+      const b = readBody(req);
+      const token = String(b.token || "").trim();
+      if (!/^[\w:\-.]{20,4096}$/.test(token)) return res.status(400).json({ error: "That phone could not be registered." });
+      if (b.remove) await dropPushToken(me.email, token);
+      else await savePushToken(me.email, token);
       return res.json({ ok: true });
     }
 
