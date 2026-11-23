@@ -1,9 +1,10 @@
 // The admin screen. The "view only" admin sees the same screens with every
 // change control removed; the server also refuses changes from that account.
 import { useEffect, useMemo, useState } from "react";
-import { Download, FileText, Flame, Gauge, MapPinned, Rocket, Route, UsersRound, Search, Settings as Cog, Store, Trash2, Users } from "lucide-react";
+import { Download, FileText, Flame, Gauge, MapPinned, MessageCircle, Rocket, Route, UsersRound, Search, Settings as Cog, Store, Trash2, Users } from "lucide-react";
 import { api } from "./api.js";
 import MapView from "./MapView.jsx";
+import { chatTarget, openChat } from "./Chat.jsx";
 import { Avatar, Board, VisitRow, VisitFacts, FocusList, fmtDay, PERIODS } from "./ui.jsx";
 import { buildMapData, indexBy, weekStartOf, dayBefore, routeStats } from "./mapdata.js";
 import { toRows, downloadCsv, downloadPdf } from "./export.js";
@@ -174,6 +175,11 @@ function Live(ctx) {
     setSel(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+  // The chat button offers to message whoever is picked on the map.
+  useEffect(() => {
+    chatTarget(person !== "all" ? person : null);
+    return () => chatTarget(null);
+  }, [person]);
   const dayOf = focus && isToday ? data.days[person] : null;
   const orders = visits.filter((v) => v.outcome === "order");
   const chosen = sel && visits.find((v) => v.id === sel);
@@ -215,7 +221,10 @@ function Live(ctx) {
                 <div className="stat"><b>{travel.last || "-"}</b><span>Last point</span></div>
               </div>
               {!travel.points && <p className="muted small">{noRoutes ? "Routes are shown for one day or up to 7 days. Pick a shorter range." : "No route saved for these dates. The route is recorded by the Android app between Start day and End day, with Location set to Allow all the time."}</p>}
-              <button className="btn" onClick={() => { setPerson("all"); setSel(null); }}><UsersRound size={16} /> Show everyone</button>
+              <div className="chips">
+                <button className="btn solid" onClick={() => openChat(focus.email)}><MessageCircle size={16} /> Message {focus.name.split(" ")[0]}</button>
+                <button className="btn" onClick={() => { setPerson("all"); setSel(null); }}><UsersRound size={16} /> Show everyone</button>
+              </div>
             </div>
           )}
           {!focus && <p className="muted small"><Route size={13} /> Tap a name to see only that person's route, heat and check-ins.</p>}

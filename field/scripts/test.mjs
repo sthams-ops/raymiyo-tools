@@ -13,7 +13,7 @@ delete process.env.FIELD_HTTPS;
 const { store } = await import("../lib/store.js");
 const { monthsBetween, weekStart, nepal } = await import("../lib/time.js");
 const api = {};
-for (const name of ["state", "visits", "shops", "day", "admin", "tv", "photo", "track"]) api[name] = (await import(`../api/${name}.js`)).default;
+for (const name of ["state", "visits", "shops", "day", "admin", "tv", "photo", "track", "chat"]) api[name] = (await import(`../api/${name}.js`)).default;
 
 const SID = { mijesh: "a".repeat(64), bivek: "b".repeat(64), divash: "c".repeat(64), sajina: "d".repeat(64) };
 const EMAIL = { mijesh: "mijesh.shrestha@unijoynepal.com", bivek: "bivek.maharjan@unijoynepal.com", divash: "divash.shilpakar@unijoynepal.com", sajina: "sajina@unijoynepal.com" };
@@ -297,6 +297,43 @@ ok(r.code === 200 && r.data.visits.length === 1 && !("me" in r.data), "TV feed w
   ok(after.board.month.every((r) => r.points === 0) && Object.keys(after.days).length === 0, "points and the day are back to zero");
   ok(after.launch && after.launch.date === nepal().date && after.users.length >= 3, "the team stays, and the start date is kept");
   ok((await call("admin", { as: "mijesh", method: "POST", body: { op: "goLive", confirm: "START" } })).code === 400, "it cannot be started twice");
+}
+
+// team chat
+{
+  for (const k of Object.keys(SID)) await store.set("field:session:" + SID[k], { email: EMAIL[k] });
+  const people = await store.hall("field:users");
+  for (const k of ["divash", "sajina"]) if (people[EMAIL[k]]) await store.hset("field:users", EMAIL[k], { ...people[EMAIL[k]], active: true });
+  const { listen } = await import("../lib/bus.js");
+  const heard = { sajina: [], mijesh: [], bivek: [] };
+  const stops = Object.keys(heard).map((k) => listen(EMAIL[k], (ev) => heard[k].push(ev)));
+  ok((await call("chat", { query: { op: "threads" } })).code === 401, "chat: signed-out person gets nothing");
+  let c = await call("chat", { as: "divash", method: "POST", body: { op: "send", to: EMAIL.sajina, text: "  Namaste\n\n\n\nKalanki done ", id: "m_abc123x_q1w2" } });
+  ok(c.code === 200 && c.data.msg.text === "Namaste\n\nKalanki done" && c.data.msg.from === EMAIL.divash, "chat: message saved, line breaks kept and tidied");
+  const again = await call("chat", { as: "divash", method: "POST", body: { op: "send", to: EMAIL.sajina, text: "Namaste", id: "m_abc123x_q1w2" } });
+  ok(again.data.msg.id === "m_abc123x_q1w2", "chat: a resent message is not saved twice");
+  ok(heard.sajina.length === 1 && heard.sajina[0].msg.text.startsWith("Namaste"), "chat: the other person gets it live, once");
+  ok(heard.mijesh.length === 1 && heard.mijesh[0].watch === true, "chat: the owner is told about team chats");
+  ok(heard.bivek.length === 0, "chat: the view-only admin is not told about other people's chats");
+  ok((await call("chat", { as: "divash", method: "POST", body: { op: "send", to: EMAIL.divash, text: "me" } })).code === 400, "chat: cannot message yourself");
+  ok((await call("chat", { as: "divash", method: "POST", body: { op: "send", to: EMAIL.sajina, text: "   " } })).code === 400, "chat: empty message refused");
+  ok((await call("chat", { as: "divash", method: "POST", body: { op: "send", to: "stranger@gmail.com", text: "hi" } })).code === 400, "chat: only people on the team list");
+  let t = await call("chat", { as: "sajina", query: { op: "threads" } });
+  ok(t.data.threads.length === 1 && t.data.threads[0].unread === 1 && t.data.threads[0].with === EMAIL.divash, "chat: unread count for the receiver");
+  ok(t.data.all === undefined && t.data.canSeeAll === false, "chat: field users cannot see other chats");
+  const pairKey = [EMAIL.divash, EMAIL.sajina].sort().join("|");
+  ok((await call("chat", { as: "bivek", query: { op: "messages", pair: pairKey } })).code === 403, "chat: view-only admin cannot read other people's chats");
+  ok((await call("chat", { as: "bivek", query: { op: "threads" } })).data.canSeeAll === false, "chat: view-only admin has no team chats list");
+  const watch = await call("chat", { as: "mijesh", query: { op: "messages", pair: pairKey } });
+  ok(watch.code === 200 && watch.data.messages.length === 1, "chat: the owner can read any conversation");
+  ok((await call("chat", { as: "mijesh", query: { op: "threads" } })).data.all.some((x) => x.pair === pairKey), "chat: the owner sees every conversation in Team chats");
+  ok((await call("chat", { as: "sajina", method: "POST", body: { op: "read", with: EMAIL.divash } })).code === 200, "chat: mark as read");
+  t = await call("chat", { as: "sajina", query: { op: "threads" } });
+  const d = await call("chat", { as: "divash", query: { op: "threads" } });
+  ok(t.data.threads[0].unread === 0 && d.data.threads[0].seenByThem >= c.data.msg.at, "chat: read clears unread and shows as seen to the sender");
+  const m = await call("chat", { as: "sajina", query: { op: "messages", with: EMAIL.divash } });
+  ok(m.data.messages.length === 1 && m.data.seen[EMAIL.sajina] >= c.data.msg.at, "chat: conversation history comes back with read times");
+  stops.forEach((s) => s());
 }
 
 console.log(`All ${passed} checks passed.`);

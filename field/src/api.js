@@ -46,4 +46,8 @@ export const api = {
   admin: (op, payload) => send("POST", "/api/admin", { op, ...payload }),
   trackToken: () => send("POST", "/api/track", { action: "token" }),
   photo: (dataUrl) => send("POST", "/api/photo", { dataUrl }),
+  chatThreads: () => call("/api/chat?op=threads"),
+  chatMessages: (q) => call("/api/chat?op=messages&" + new URLSearchParams(q).toString()),
+  chatSend: (to, text, id) => send("POST", "/api/chat", { op: "send", to, text, id }),
+  chatRead: (who) => send("POST", "/api/chat", { op: "read", with: who }),
 };

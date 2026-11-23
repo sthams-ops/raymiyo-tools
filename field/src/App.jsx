@@ -6,6 +6,7 @@ import { flush, loadOutbox, watchOutbox, withOutbox, saveState, savedState } fro
 import Rep from "./Rep.jsx";
 import Admin from "./Admin.jsx";
 import TV from "./TV.jsx";
+import Chat from "./Chat.jsx";
 import { Avatar, Toast, Brand } from "./ui.jsx";
 import { ROLES } from "../shared/rules.js";
 
@@ -172,6 +173,7 @@ function Signed() {
       )}
       {!data.launch && (me.role === "rep" || tryField) && <p className="banner">Practice mode. Check-ins saved now are for learning and will be cleared before the real first day.</p>}
       {me.role === "rep" || (me.role === "admin" && tryField) ? <Rep data={view} reload={sync} say={say} waiting={mine} /> : <Admin data={data} reload={reload} setRange={setRange} say={say} />}
+      <Chat me={me} users={data.users} />
       <Toast text={toast} />
     </>
   );
