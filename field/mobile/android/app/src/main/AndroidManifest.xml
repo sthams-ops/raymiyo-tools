@@ -24,6 +24,11 @@
 
         </activity>
 
+        <!-- Chat messages sent through Firebase when the app is closed. -->
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="chat" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_chat" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/chat_notice" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -46,4 +51,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Vibrate for new chat messages. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 </manifest>

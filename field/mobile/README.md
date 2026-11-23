@@ -43,10 +43,23 @@ signing/                the password-protected signing key
 The tracking code itself is in the website: `field/src/tracking.js` (phone side)
 and `field/lib/track.js` + `field/api/track.js` (server side).
 
+## Chat notifications (Firebase)
+
+New chat messages ring the phone even when the app is closed, through
+Firebase Cloud Messaging (free). Firebase project: **raymiyo-field**
+(console.firebase.google.com, Mijesh's Google account).
+
+- `android/app/google-services.json` tells the app which Firebase project to use.
+  It holds no secret; Google designed it to ship inside the app.
+- The server sends the messages with the service account key in the Railway
+  variable `FIREBASE_SERVICE_ACCOUNT`. That key **is** secret and is never in the code.
+- `res/raw/chat_ding.wav` is the message sound, `res/drawable/ic_stat_chat.xml`
+  the status bar icon. The "Chat messages" channel is made in `MainActivity.java`.
+
 ## Settings each phone needs once
 
 - Allow installing from the app used to open the file (WhatsApp, Files, Chrome).
 - Location permission: **Allow** / **While using the app**, with **Precise** on.
-- Notifications: **Allow** (that is the "tracking is on" notice).
+- Notifications: **Allow** (the "tracking is on" notice and chat messages).
 - Battery: set the app to **Unrestricted** so the phone does not stop tracking.
 - Do not swipe the app away from recent apps during the day; that stops tracking.
