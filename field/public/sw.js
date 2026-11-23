@@ -84,3 +84,52 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+// Chat notifications (iPhone home-screen app and browsers). The server sends
+// one for each new message while the app is not on screen. iPhone requires a
+// visible notification for every push, so one is always shown.
+self.addEventListener("push", (event) => {
+  let d = {};
+  try {
+    d = event.data ? event.data.json() : {};
+  } catch {
+    d = { title: "Raymiyo Field", body: event.data ? event.data.text() : "New message" };
+  }
+  event.waitUntil(
+    (async () => {
+      await self.registration.showNotification(d.title || "Raymiyo Field", {
+        body: d.body || "New message",
+        tag: d.tag || "chat",
+        renotify: true,
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        data: { from: d.from || "", tag: d.tag || "" },
+      });
+      // The number on the app icon: all unread messages.
+      if (typeof d.total === "number" && self.navigator.setAppBadge) {
+        try {
+          if (d.total > 0) await self.navigator.setAppBadge(d.total);
+          else await self.navigator.clearAppBadge();
+        } catch {}
+      }
+    })()
+  );
+});
+
+// Tapping a notification opens that person's chat.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const from = (event.notification.data && event.notification.data.from) || "";
+  event.waitUntil(
+    (async () => {
+      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const win = wins.find((w) => new URL(w.url).origin === self.location.origin);
+      if (win) {
+        await win.focus().catch(() => {});
+        win.postMessage({ type: "open-chat", from });
+        return;
+      }
+      await self.clients.openWindow("/?chat=" + encodeURIComponent(from));
+    })()
+  );
+});

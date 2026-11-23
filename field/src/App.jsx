@@ -8,6 +8,7 @@ import Admin from "./Admin.jsx";
 import TV from "./TV.jsx";
 import Chat from "./Chat.jsx";
 import { forgetPush } from "./push.js";
+import { forgetWebPush } from "./webpush.js";
 import { Avatar, Toast, Brand } from "./ui.jsx";
 import { ROLES } from "../shared/rules.js";
 
@@ -163,7 +164,7 @@ function Signed() {
             <b>{me.name}</b>
             <small>{ROLES[me.role]}</small>
           </span>
-          <a className="icon" href="/api/auth?action=logout" aria-label="Sign out" onClick={async (e) => { e.preventDefault(); await forgetPush(); window.location.href = "/api/auth?action=logout"; }}><LogOut size={18} /></a>
+          <a className="icon" href="/api/auth?action=logout" aria-label="Sign out" onClick={async (e) => { e.preventDefault(); await forgetPush(); await forgetWebPush(); window.location.href = "/api/auth?action=logout"; }}><LogOut size={18} /></a>
         </div>
       </header>
       {(offline || mine.length > 0) && (

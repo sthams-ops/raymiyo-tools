@@ -4,12 +4,13 @@
 // make a sound, and show a small preview when the chat is closed.
 // The owner also gets "Team chats": every conversation, read-only.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { MessageCircle, X, ArrowLeft, SendHorizontal, Check, CheckCheck, Clock3, AlertCircle, ChevronDown, Eye } from "lucide-react";
+import { MessageCircle, X, ArrowLeft, SendHorizontal, Check, CheckCheck, Clock3, AlertCircle, ChevronDown, Eye, BellRing, BellOff, Share } from "lucide-react";
 import { api } from "./api.js";
 import { Avatar, firstName } from "./ui.jsx";
 import { ROLES } from "../shared/rules.js";
 import { playSent, playReceived, unlockSound } from "./sound.js";
 import { startPush, clearNotices } from "./push.js";
+import { webPushStatus, enableWebPush, refreshWebPush, reportPresence, clearWebNotices } from "./webpush.js";
 
 // Other screens use these to point the chat at a person.
 export const chatTarget = (email) => window.dispatchEvent(new CustomEvent("field:chat-target", { detail: { email: email || null } }));
@@ -62,6 +63,8 @@ export default function Chat({ me, users }) {
   const [target, setTarget] = useState(null);
   const [peek, setPeek] = useState(null);
   const [live, setLive] = useState(false);
+  const [vapid, setVapid] = useState("");
+  const [bell, setBell] = useState(() => webPushStatus());
   const state = useRef({});
   state.current = { open, view };
   const peekTimer = useRef(null);
@@ -72,6 +75,7 @@ export default function Chat({ me, users }) {
       setThreads(r.threads || []);
       setAll(r.all || []);
       setCanSeeAll(!!r.canSeeAll);
+      if (r.vapid) setVapid(r.vapid);
     } catch {}
   }, []);
 
@@ -101,6 +105,7 @@ export default function Chat({ me, users }) {
       setThreads((ts) => ts.map((t) => (t.with === other ? { ...t, unread: 0 } : t)));
       api.chatRead(other).catch(() => {});
       clearNotices(pairOf(me.email, other));
+      clearWebNotices(pairOf(me.email, other));
     },
     [me.email]
   );
@@ -246,6 +251,14 @@ export default function Chat({ me, users }) {
       } else if (depth === 1) setView({ kind: "list" });
     };
     startPush((email) => openPanel(email));
+    // Tapping an iPhone/browser notification: the app is told which chat to open.
+    const onWorker = (e) => e.data && e.data.type === "open-chat" && openPanel(e.data.from || null);
+    if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", onWorker);
+    const asked = new URLSearchParams(window.location.search).get("chat");
+    if (asked !== null) {
+      window.history.replaceState(null, "", window.location.pathname);
+      openPanel(asked || null);
+    }
     const onTarget = (e) => setTarget(e.detail.email);
     const onOpen = (e) => openPanel(e.detail.email);
     window.addEventListener("popstate", onPop);
@@ -255,8 +268,36 @@ export default function Chat({ me, users }) {
       window.removeEventListener("popstate", onPop);
       window.removeEventListener("field:chat-target", onTarget);
       window.removeEventListener("field:chat-open", onOpen);
+      if ("serviceWorker" in navigator) navigator.serviceWorker.removeEventListener("message", onWorker);
     };
   }, [openPanel]);
+
+  // This device's notification setup is refreshed once the server key is known,
+  // and the server is told whenever the app comes on or goes off screen.
+  useEffect(() => {
+    if (!vapid) return;
+    refreshWebPush(vapid).then(reportPresence);
+    const tell = () => reportPresence();
+    const timer = setInterval(() => document.visibilityState === "visible" && tell(), 45000);
+    document.addEventListener("visibilitychange", tell);
+    window.addEventListener("pagehide", tell);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", tell);
+      window.removeEventListener("pagehide", tell);
+    };
+  }, [vapid]);
+  const turnOnBell = async () => {
+    let problem = "";
+    try {
+      await enableWebPush(vapid);
+      reportPresence();
+    } catch (e) {
+      problem = (e && e.message) || "Could not turn on notifications. Try again.";
+    }
+    setBell(webPushStatus());
+    return problem;
+  };
 
   // Phones: the chat covers the screen, so the page behind must not scroll.
   useEffect(() => {
@@ -329,6 +370,8 @@ export default function Chat({ me, users }) {
               close={closePanel}
               pick={(email) => enterThread({ kind: "thread", key: email })}
               watch={(p) => enterThread({ kind: "watch", key: p })}
+              bell={vapid ? bell : "none"}
+              turnOnBell={turnOnBell}
             />
           ) : (
             <Thread
@@ -354,7 +397,61 @@ function Status({ live }) {
   return <span className={"chat-live" + (live ? " on" : "")}>{live ? "Live" : "Connecting…"}</span>;
 }
 
-function ChatList({ me, users, userMap, threads, all, canSeeAll, tab, setTab, live, close, pick, watch }) {
+// Tells the person how to get a ring for new messages on this device.
+function Bell({ bell, turnOnBell }) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState("");
+  if (bell === "off") {
+    return (
+      <div className="chat-bell">
+        <BellRing size={20} />
+        <span>
+          <b>Get a ring for new messages</b>
+          <small>{problem || "Even when the app is closed."}</small>
+        </span>
+        <button className="btn solid small" disabled={busy} onClick={async () => { setBusy(true); setProblem(await turnOnBell()); setBusy(false); }}>
+          {busy ? "Turning on…" : "Turn on"}
+        </button>
+      </div>
+    );
+  }
+  if (bell === "blocked") {
+    return (
+      <div className="chat-bell warn">
+        <BellOff size={20} />
+        <span>
+          <b>Notifications are off for this app</b>
+          <small>iPhone: Settings → Notifications → Field → Allow Notifications. Then open the app again.</small>
+        </span>
+      </div>
+    );
+  }
+  if (bell === "home") {
+    return (
+      <div className="chat-bell warn">
+        <Share size={20} />
+        <span>
+          <b>Add the app to your Home Screen to get a ring for messages</b>
+          <small>In Safari tap Share → Add to Home Screen, then open Field from the Home Screen.</small>
+        </span>
+      </div>
+    );
+  }
+  if (bell === "old") {
+    return (
+      <div className="chat-bell warn">
+        <BellOff size={20} />
+        <span>
+          <b>Update your iPhone to get a ring for messages</b>
+          <small>Message notifications need iOS 16.4 or newer.</small>
+        </span>
+      </div>
+    );
+  }
+  return null;
+}
+
+function ChatList({ me, users, userMap, threads, all, canSeeAll, tab, setTab, live, close, pick, watch, bell, turnOnBell }) {
   const withThread = new Set(threads.map((t) => t.with));
   const rest = users.filter((u) => u.active !== false && u.email !== me.email && !withThread.has(u.email)).sort((a, b) => a.name.localeCompare(b.name));
   return (
@@ -373,6 +470,7 @@ function ChatList({ me, users, userMap, threads, all, canSeeAll, tab, setTab, li
         </div>
       )}
       <div className="chat-scroll">
+        <Bell bell={bell} turnOnBell={turnOnBell} />
         {tab === "mine" || !canSeeAll ? (
           <>
             {threads.map((t) => {

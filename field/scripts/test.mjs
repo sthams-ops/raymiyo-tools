@@ -333,6 +333,11 @@ ok(r.code === 200 && r.data.visits.length === 1 && !("me" in r.data), "TV feed w
   ok(t.data.threads[0].unread === 0 && d.data.threads[0].seenByThem >= c.data.msg.at, "chat: read clears unread and shows as seen to the sender");
   const m = await call("chat", { as: "sajina", query: { op: "messages", with: EMAIL.divash } });
   ok(m.data.messages.length === 1 && m.data.seen[EMAIL.sajina] >= c.data.msg.at, "chat: conversation history comes back with read times");
+  const sub = { endpoint: "https://web.push.apple.com/abc123def456", keys: { p256dh: "B".repeat(87), auth: "a".repeat(22) } };
+  ok((await call("chat", { as: "mijesh", method: "POST", body: { op: "webpush", sub } })).code === 200, "chat: iPhone notification setup is saved");
+  ok((await call("chat", { as: "mijesh", method: "POST", body: { op: "webpush", sub: { endpoint: "javascript:x" } } })).code === 400, "chat: a broken notification setup is refused");
+  ok((await call("chat", { as: "mijesh", method: "POST", body: { op: "presence", endpoint: sub.endpoint, visible: true } })).code === 200, "chat: on-screen report accepted");
+  ok((await store.hget("field:webpush", EMAIL.mijesh)).length === 1, "chat: one entry per device");
   stops.forEach((s) => s());
 }
 

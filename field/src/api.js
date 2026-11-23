@@ -51,4 +51,6 @@ export const api = {
   chatSend: (to, text, id) => send("POST", "/api/chat", { op: "send", to, text, id }),
   chatRead: (who) => send("POST", "/api/chat", { op: "read", with: who }),
   chatPush: (token, remove) => send("POST", "/api/chat", { op: "push", token, remove: !!remove }),
+  chatWebPush: (sub, removeEndpoint) => send("POST", "/api/chat", removeEndpoint ? { op: "webpush", remove: true, endpoint: removeEndpoint } : { op: "webpush", sub }),
+  chatPresence: (endpoint, visible) => send("POST", "/api/chat", { op: "presence", endpoint, visible }),
 };

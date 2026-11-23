@@ -5,7 +5,9 @@
 //   GET  ?op=stream                  live events (Server-Sent Events)
 //   POST { op: "send", to, text, id }
 //   POST { op: "read", with }
-//   POST { op: "push", token, remove }   this phone's Firebase token, for notifications when the app is closed
+//   POST { op: "push", token, remove }   this phone's Firebase token, for notifications when the app is closed (Android app)
+//   POST { op: "webpush", sub, remove }  this device's Web Push subscription (iPhone home-screen app, browsers)
+//   POST { op: "presence", endpoint, visible }  the app is on screen, so that device is not rung as well
 // Messages are never deleted. Only the owner account can read conversations
 // it is not part of; nobody else can, including view-only admins.
 //
@@ -17,6 +19,7 @@ import { store } from "../lib/store.js";
 import { guard, readBody, fail, loadUsers, rid, OWNER } from "../lib/auth.js";
 import { publish, listen } from "../lib/bus.js";
 import { pushTo, savePushToken, dropPushToken } from "../lib/push.js";
+import { webPushTo, webPushKey, saveWebPush, dropWebPush, setOnScreen } from "../lib/webpush.js";
 
 const THREADS = "field:chat:threads";
 const STATE = "field:chat:state";
@@ -57,6 +60,14 @@ function cleanText(v) {
     .slice(0, 2000);
 }
 
+// All unread messages for one person, for the number on the app icon.
+async function totalUnread(email) {
+  const all = await store.hall(STATE);
+  let n = 0;
+  for (const [k, v] of Object.entries(all)) if (k.startsWith(email + ">")) n += (v && v.unread) || 0;
+  return n;
+}
+
 const stateOf = async (email, pair) => (await store.hget(STATE, `${email}>${pair}`)) || { unread: 0, seen: 0 };
 
 export default async function handler(req, res) {
@@ -88,7 +99,7 @@ export default async function handler(req, res) {
         }
       }
       const byLast = (x, y) => (y.last ? y.last.at : 0) - (x.last ? x.last.at : 0);
-      return res.json({ threads: mine.sort(byLast), all: owner ? others.sort(byLast) : undefined, canSeeAll: owner });
+      return res.json({ threads: mine.sort(byLast), all: owner ? others.sort(byLast) : undefined, canSeeAll: owner, vapid: webPushKey() });
     }
 
     if (req.method === "GET" && op === "messages") {
@@ -166,6 +177,13 @@ export default async function handler(req, res) {
           count: unread,
           data: { type: "chat", from: me.email, pair },
         }).catch((e) => console.error("Push failed", e.message));
+        await webPushTo(to.email, {
+          title: unread > 1 ? `${me.name} (${unread} messages)` : me.name,
+          body: text.length > 300 ? text.slice(0, 297) + "…" : text,
+          tag: pair,
+          from: me.email,
+          total: await totalUnread(to.email),
+        }).catch((e) => console.error("Web push failed", e.message));
       }
       return res.json({ msg: clean });
     }
@@ -183,6 +201,22 @@ export default async function handler(req, res) {
       const event = { type: "read", pair, by: me.email, at };
       publish(other, event);
       publish(me.email, event);
+      return res.json({ ok: true });
+    }
+
+    if (req.method === "POST" && op === "webpush") {
+      const b = readBody(req);
+      if (b.remove) {
+        await dropWebPush(me.email, String(b.endpoint || ""));
+        return res.json({ ok: true });
+      }
+      if (!(await saveWebPush(me.email, b.sub))) return res.status(400).json({ error: "This device could not be set up for notifications." });
+      return res.json({ ok: true });
+    }
+
+    if (req.method === "POST" && op === "presence") {
+      const b = readBody(req);
+      setOnScreen(String(b.endpoint || "").slice(0, 800), !!b.visible);
       return res.json({ ok: true });
     }
 
