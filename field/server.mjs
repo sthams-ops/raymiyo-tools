@@ -12,7 +12,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.join(root, "dist");
 const types = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml",
-  ".png": "image/png", ".jpg": "image/jpeg", ".json": "application/json", ".webmanifest": "application/manifest+json",
+  ".png": "image/png", ".mp3": "audio/mpeg", ".jpg": "image/jpeg", ".json": "application/json", ".webmanifest": "application/manifest+json",
   ".ico": "image/x-icon", ".woff2": "font/woff2",
 };
 const squeezable = new Set([".html", ".js", ".css", ".svg", ".json", ".webmanifest"]);

@@ -13,7 +13,7 @@ function shellList() {
       if (!fs.existsSync(dist)) return;
       const heavy = /jspdf|html2canvas|purify|autotable/i; // PDF export: office use, needs signal
       const files = fs.readdirSync(path.join(dist, "assets")).filter((f) => !heavy.test(f)).map((f) => "/assets/" + f);
-      files.push("/brand/raymiyo-mark.png", "/brand/raymiyo-logo.png", "/icon-192.png", "/manifest.webmanifest");
+      files.push("/sounds/raymiyo-soft.mp3", "/brand/raymiyo-mark.png", "/brand/raymiyo-logo.png", "/icon-192.png", "/manifest.webmanifest");
       fs.writeFileSync(path.join(dist, "shell.json"), JSON.stringify({ built: Date.now(), files }));
     },
   };
