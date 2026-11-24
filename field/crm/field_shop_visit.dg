@@ -368,6 +368,75 @@ string standalone.field_shop_visit(string crmAPIRequest)
 			{
 				soMap.put("Owner",ownerId);
 			}
+			// ---- The order needs a Contact with a mobile (Approve step asks for it) ----
+			// Use the person the rep talked to; else any contact of the shop with a
+			// mobile; else make a contact from the shop's phone.
+			contactId = "";
+			personName = ifnull(p.get("contact_person"),"").toString().trim();
+			try
+			{
+				shopContacts = zoho.crm.getRelatedRecords("Contacts","Accounts",accId.toLong());
+				for each  sc in shopContacts
+				{
+					scName = (ifnull(sc.get("First_Name"),"") + " " + ifnull(sc.get("Last_Name"),"")).trim();
+					if(contactId == "" && personName != "" && scName.equalsIgnoreCase(personName))
+					{
+						contactId = sc.get("id").toString();
+					}
+				}
+				if(contactId == "" && personName == "")
+				{
+					for each  sc in shopContacts
+					{
+						if(contactId == "" && ifnull(sc.get("Mobile"),"") != "")
+						{
+							contactId = sc.get("id").toString();
+						}
+					}
+				}
+			}
+			catch (e8)
+			{
+			}
+			if(contactId == "" && phone != "")
+			{
+				con = Map();
+				if(personName != "")
+				{
+					if(personName.contains(" "))
+					{
+						con.put("First_Name",personName.getPrefix(" "));
+						con.put("Last_Name",personName.getSuffix(" ").trim());
+					}
+					else
+					{
+						con.put("Last_Name",personName);
+					}
+					con.put("Title",ifnull(p.get("contact_role"),"Owner"));
+				}
+				else
+				{
+					con.put("Last_Name",shopName);
+					con.put("Title","Shop");
+				}
+				con.put("Mobile",phone);
+				con.put("Phone",phone);
+				con.put("Account_Name",accId);
+				if(ownerId != null)
+				{
+					con.put("Owner",ownerId);
+				}
+				con.put("Description","Shop contact added from the Raymiyo Field app.");
+				madeCon = zoho.crm.createRecord("Contacts",con);
+				if(madeCon.get("id") != null)
+				{
+					contactId = madeCon.get("id").toString();
+				}
+			}
+			if(contactId != "")
+			{
+				soMap.put("Contact_Name",contactId);
+			}
 			linesA = List();
 			linesB = List();
 			for each  lineItem in orderItems
