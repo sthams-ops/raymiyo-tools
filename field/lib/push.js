@@ -98,9 +98,9 @@ export async function pushTo(email, { title, body, tag, count, data }) {
         priority: "HIGH",
         ttl: "86400s",
         notification: {
-          channel_id: "chat",
+          channel_id: "chat_v2",
           tag,
-          sound: "chat_ding",
+          sound: "raymiyo_chime",
           icon: "ic_stat_chat",
           color: "#38645B",
           notification_count: Math.max(1, Number(count) || 1),

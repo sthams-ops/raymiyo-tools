@@ -25,7 +25,7 @@
         </activity>
 
         <!-- Chat messages sent through Firebase when the app is closed. -->
-        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="chat" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="chat_v2" />
         <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/ic_stat_chat" />
         <meta-data android:name="com.google.firebase.messaging.default_notification_color" android:resource="@color/chat_notice" />
 
