@@ -15,8 +15,8 @@ import org.json.JSONObject;
 public class MainActivity extends BridgeActivity {
 
     // Android fixes a channel's sound when it is first made, so a new sound
-    // needs a new channel. "chat" (the old ding) is removed.
-    static final String CHAT_CHANNEL = "chat_v2";
+    // needs a new channel. Older ones ("chat", "chat_v2") are removed.
+    static final String CHAT_CHANNEL = "chat_v3";
     static final String APP_URL = "https://field.raymiyo.com/";
 
     @Override
@@ -53,23 +53,25 @@ public class MainActivity extends BridgeActivity {
         return sender;
     }
 
-    // The "Chat messages" channel: Raymiyo chime, long vibration, number on the app icon.
+    // The "Chat messages" channel: soft Raymiyo tone, gentle vibration, number on the app icon.
     private void createChatChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager == null) return;
-        if (manager.getNotificationChannel("chat") != null) manager.deleteNotificationChannel("chat");
+        for (String old : new String[] { "chat", "chat_v2" }) {
+            if (manager.getNotificationChannel(old) != null) manager.deleteNotificationChannel(old);
+        }
         if (manager.getNotificationChannel(CHAT_CHANNEL) != null) return;
         NotificationChannel channel = new NotificationChannel(CHAT_CHANNEL, "Chat messages", NotificationManager.IMPORTANCE_HIGH);
         channel.setDescription("Messages from the Raymiyo team");
-        Uri sound = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getPackageName() + "/raw/raymiyo_chime");
+        Uri sound = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getPackageName() + "/raw/raymiyo_soft");
         AudioAttributes attributes = new AudioAttributes.Builder()
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
             .build();
         channel.setSound(sound, attributes);
         channel.enableVibration(true);
-        channel.setVibrationPattern(new long[] { 0, 300, 150, 300, 150, 500 });
+        channel.setVibrationPattern(new long[] { 0, 250, 180, 250 });
         channel.enableLights(true);
         channel.setLightColor(0xFF38645B);
         channel.setShowBadge(true);
