@@ -67,6 +67,16 @@ export async function dropPushToken(email, token) {
   await store.hset(KEY, email, mine.filter((t) => t.token !== token));
 }
 
+// Google refuses a push whose data has a reserved key ("from", "notification",
+// "message_type", or one starting with "google" or "gcm"): the whole message
+// fails with 400 and the phone never rings. "from" becomes "sender".
+const RESERVED = /^(from|notification|message_type|google.*|gcm.*)$/i;
+export function fcmData(data) {
+  const out = {};
+  for (const [k, v] of Object.entries(data || {})) out[RESERVED.test(k) ? (k.toLowerCase() === "from" ? "sender" : "app_" + k) : k] = String(v);
+  return out;
+}
+
 // Sends one notification to every phone of this person.
 //   tag   one notification per conversation; a newer message replaces the older one
 //   count unread messages in that conversation, shown as the number on the app icon
@@ -76,7 +86,7 @@ export async function pushTo(email, { title, body, tag, count, data }) {
   if (!list.length) return { sent: 0 };
   const token = await accessToken();
   const url = `https://fcm.googleapis.com/v1/projects/${account.project_id}/messages:send`;
-  const strData = Object.fromEntries(Object.entries(data || {}).map(([k, v]) => [k, String(v)]));
+  const strData = fcmData(data);
   let sent = 0;
   const dead = [];
   for (const t of list) {

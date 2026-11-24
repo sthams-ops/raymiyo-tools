@@ -17,7 +17,8 @@ export async function startPush(onOpen) {
     // Tapping a notification opens that person's chat.
     await Push.addListener("pushNotificationActionPerformed", (action) => {
       const d = (action && action.notification && action.notification.data) || {};
-      if (d.from) onOpen(d.from);
+      const who = d.sender || d.from;
+      if (who) onOpen(who);
     });
     await Push.addListener("registration", (t) => {
       try {

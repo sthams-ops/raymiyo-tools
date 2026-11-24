@@ -175,7 +175,7 @@ export default async function handler(req, res) {
           body: text.length > 300 ? text.slice(0, 297) + "…" : text,
           tag: pair,
           count: unread,
-          data: { type: "chat", from: me.email, pair },
+          data: { type: "chat", sender: me.email, pair },
         }).catch((e) => console.error("Push failed", e.message));
         await webPushTo(to.email, {
           title: unread > 1 ? `${me.name} (${unread} messages)` : me.name,

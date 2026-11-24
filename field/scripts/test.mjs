@@ -341,4 +341,13 @@ ok(r.code === 200 && r.data.visits.length === 1 && !("me" in r.data), "TV feed w
   stops.forEach((s) => s());
 }
 
+// Google refuses Android pushes whose data holds a reserved key ("from" did, and no phone rang).
+{
+  const { fcmData } = await import("../lib/push.js");
+  const d = fcmData({ type: "chat", from: "a@b.c", pair: "x|y", notification: 1, gcm_x: 2, google_y: 3, message_type: 4 });
+  ok(!("from" in d) && d.sender === "a@b.c", "push: 'from' is sent as 'sender'");
+  ok(Object.keys(d).every((k) => !/^(from|notification|message_type|google.*|gcm.*)$/i.test(k)), "push: no reserved key reaches Google");
+  ok(d.type === "chat" && d.pair === "x|y", "push: other keys are kept");
+}
+
 console.log(`All ${passed} checks passed.`);
