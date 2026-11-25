@@ -350,4 +350,46 @@ ok(r.code === 200 && r.data.visits.length === 1 && !("me" in r.data), "TV feed w
   ok(d.type === "chat" && d.pair === "x|y", "push: other keys are kept");
 }
 
+// The office TV's checks on a field day.
+{
+  const { watchDay, routeMetres, longStops } = await import("../shared/watch.js");
+  const D = "2026-11-25"; // a Wednesday
+  const at = (hm) => Math.floor(Date.parse(`${D}T${hm}:00+05:45`) / 1000);
+  const A = { email: "a@x", name: "Asha Rai", color: "#0EA5A4" };
+  const B = { email: "b@x", name: "Bina KC", color: "#7C3AED" };
+  const shops = [{ id: "s1", name: "Ram Pharmacy", area: "Kalanki", lat: 27.7, lng: 85.3 }, { id: "s9", name: "Tea Corner", area: "Kalanki", lat: 27.75, lng: 85.35 }];
+  const v = (rep, time, shopId, shopName, lat, lng, extra = {}) => ({ id: rep + time, date: D, rep, time, shopId, shopName, lat, lng, outcome: "interested", value: 0, photo: "/p.jpg", ...extra });
+  // A walks east 1 km, then sits 40 min at the tea shop, then the phone goes quiet.
+  const lineA = [[27.7, 85.3, at("10:00")], [27.7, 85.305, at("10:10")], [27.7, 85.31, at("10:20")]];
+  for (let m = 0; m <= 40; m += 5) lineA.push([27.75, 85.35 + m * 1e-6, at("11:00") + m * 60]);
+  const visits = [
+    v(A.email, "12:30", "s1", "Ram Pharmacy", 27.7, 85.3, { outcome: "order", value: 5000, first: true, newShop: true }),
+    v(A.email, "12:33", "s2", "Far Mart", 27.8, 85.4), // 13 km in 3 min
+    v(B.email, "12:35", "s3", "Next Door", 27.7005, 85.3005, { photo: "" }),
+    v(B.email, "12:50", "s4", "Corner", 27.8003, 85.4003),
+  ];
+  const out = watchDay({ date: D, nowSec: at("14:00"), users: [A, B], visits, days: { [A.email]: { start: "09:55" }, [B.email]: { start: "09:58", mock: 4, mockAt: "11:02" } }, tracks: { [A.email]: lineA }, shops, dailyVisits: 12 });
+  const kinds = (rep) => out.alerts.filter((x) => x.rep === rep).map((x) => x.kind);
+  const a = out.reps.find((r) => r.email === A.email);
+  ok(Math.abs(routeMetres(lineA.slice(0, 3)) - 990) < 30, "tv: route distance in metres");
+  ok(a.metres > 900 && a.orders === 1 && a.amount === 5000 && a.visits === 2, "tv: km, orders and amount per person");
+  ok(longStops(lineA).length === 1, "tv: a 40-minute stop is found");
+  ok(kinds(A.email).includes("stop") && out.alerts.find((x) => x.kind === "stop").detail.includes("Tea Corner"), "tv: long stop with no check-in names the nearby place");
+  ok(kinds(A.email).includes("jump"), "tv: 13 km in 3 minutes is flagged");
+  ok(kinds(A.email).includes("quiet"), "tv: phone location silent is flagged");
+  ok(kinds(A.email).includes("latefirst"), "tv: first shop after noon is flagged");
+  ok(kinds(B.email).includes("mock") && out.alerts[0].level === "high", "tv: fake-GPS app is flagged first");
+  ok(kinds(B.email).includes("photo"), "tv: check-in without photo is noted");
+  ok(out.alerts.some((x) => x.kind === "together"), "tv: two people working the same streets");
+  ok(out.team.amount === 5000 && out.team.visits === 4, "tv: team totals");
+  // Check-in far from where the phone actually was.
+  const lineC = [[27.7, 85.3, at("13:00")]];
+  const c = watchDay({ date: D, nowSec: at("13:05"), users: [A], visits: [v(A.email, "13:00", "s1", "Ram Pharmacy", 27.72, 85.3)], days: { [A.email]: { start: "09:00" } }, tracks: { [A.email]: lineC }, shops });
+  ok(c.alerts.some((x) => x.kind === "away"), "tv: check-in 2 km from the live route is flagged");
+  ok(!c.alerts.some((x) => x.kind === "stop"), "tv: no stop alert without a long stay");
+  // Saturday is the day off: no lateness checks.
+  const sat = watchDay({ date: "2026-11-28", nowSec: Math.floor(Date.parse("2026-11-28T14:00:00+05:45") / 1000), users: [A], visits: [], days: {}, tracks: {}, shops });
+  ok(sat.alerts.length === 0 && sat.reps[0].status.kind === "off", "tv: Saturday has no time alerts");
+}
+
 console.log(`All ${passed} checks passed.`);

@@ -100,7 +100,8 @@ export async function startTracking(report) {
           return;
         }
         if (!location) return;
-        queue.push({ lat: location.latitude, lng: location.longitude, accuracy: Math.round(location.accuracy || 0), t: location.time || Date.now() });
+        // simulated: Android says the position came from a fake-GPS (mock location) app.
+        queue.push({ lat: location.latitude, lng: location.longitude, accuracy: Math.round(location.accuracy || 0), t: location.time || Date.now(), ...(location.simulated ? { mock: 1 } : {}) });
         if (queue.length > MAX_QUEUE) queue = queue.slice(-MAX_QUEUE);
         save(QUEUE_KEY, queue);
         flush(false);

@@ -39,17 +39,25 @@ export async function addPoints(email, points) {
   const nowSec = Math.floor(now.getTime() / 1000);
   const fresh = (Array.isArray(points) ? points : [])
     .slice(0, 500)
-    .map((p) => ({ lat: Number(p && p.lat), lng: Number(p && p.lng), t: Math.floor(Number(p && p.t) / 1000), acc: Number(p && p.accuracy) || 0 }))
+    .map((p) => ({ lat: Number(p && p.lat), lng: Number(p && p.lng), t: Math.floor(Number(p && p.t) / 1000), acc: Number(p && p.accuracy) || 0, mock: !!(p && p.mock) }))
     .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng) && Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180)
     .filter((p) => Number.isFinite(p.t) && p.t <= nowSec + 120 && nepal(new Date(p.t * 1000)).date === date)
     .filter((p) => p.acc <= MAX_ACCURACY)
     .sort((a, b) => a.t - b.t);
-  if (!fresh.length) return { tracking: true, saved: 0 };
+  // Points from a fake-GPS app are counted for the office and never drawn as the route.
+  const mocked = fresh.filter((p) => p.mock);
+  if (mocked.length) {
+    day.mock = (day.mock || 0) + mocked.length;
+    if (!day.mockAt) day.mockAt = nepal(new Date(mocked[0].t * 1000)).time;
+    await store.hset(dayKey, email, day);
+  }
+  const real = fresh.filter((p) => !p.mock);
+  if (!real.length) return { tracking: true, saved: 0 };
 
   const key = "field:track:" + date;
   const line = (await store.hget(key, email)) || [];
   let saved = 0;
-  for (const p of fresh) {
+  for (const p of real) {
     const last = line[line.length - 1];
     if (last) {
       if (p.t <= last[2]) continue;
@@ -63,7 +71,7 @@ export async function addPoints(email, points) {
   if (saved) await store.hset(key, email, line);
 
   // The newest point moves the person's live dot on the map.
-  const newest = fresh[fresh.length - 1];
+  const newest = real[real.length - 1];
   const at = nepal(new Date(newest.t * 1000)).time;
   await store.hset(dayKey, email, { ...day, lat: newest.lat, lng: newest.lng, at });
   return { tracking: true, saved };

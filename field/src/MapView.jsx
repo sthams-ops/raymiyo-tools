@@ -4,6 +4,7 @@
 //   dots  unvisited shops  [{ id, lat, lng, title }]
 //   live  last known spots [{ key, lat, lng, color, initial, label }]
 //   routes paths travelled  [{ key, color, coords: [[lng, lat], ...] }]
+//   flags  places to check  [{ key, lat, lng, level: "high" | "mid", title }]
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -92,7 +93,7 @@ const routeData = (routes) => ({
   features: routes.map((r) => ({ type: "Feature", properties: { color: r.color }, geometry: { type: "LineString", coordinates: r.coords } })),
 });
 
-export default function MapView({ pins = [], dots = [], live = [], routes = [], heat = [], showHeat = false, focus = "", legend = false, selected, onSelect, className = "", children }) {
+export default function MapView({ pins = [], dots = [], live = [], routes = [], flags = [], heat = [], showHeat = false, focus = "", legend = false, selected, onSelect, className = "", children }) {
   const box = useRef(null);
   const map = useRef(null);
   const marks = useRef([]);
@@ -177,7 +178,7 @@ export default function MapView({ pins = [], dots = [], live = [], routes = [], 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [heatSignature]);
 
-  const signature = JSON.stringify([pins, dots, live, selected]);
+  const signature = JSON.stringify([pins, dots, live, flags, selected]);
   useEffect(() => {
     const m = map.current;
     if (!m) return;
@@ -221,6 +222,14 @@ export default function MapView({ pins = [], dots = [], live = [], routes = [], 
       el.title = l.label;
       // Sits up and to the right so it never hides the pin of the last check-in.
       add(el, l, { offset: [28, -36] });
+    });
+
+    flags.forEach((k) => {
+      const el = document.createElement("div");
+      el.className = "map-flag lv-" + k.level;
+      el.title = k.title;
+      el.textContent = "!";
+      add(el, k);
     });
 
     if (!fitted.current && (pins.length || live.length || dots.length)) {

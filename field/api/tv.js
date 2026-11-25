@@ -7,6 +7,7 @@ import { loadUsers, fail } from "../lib/auth.js";
 import { loadSettings, loadVisits, buildBoard, publicUser } from "../lib/data.js";
 import { nepal, weekStart, addDays } from "../lib/time.js";
 import { loadTracks } from "../lib/track.js";
+import { watchDay } from "../shared/watch.js";
 
 function sameKey(a, b) {
   const x = Buffer.from(String(a || ""));
@@ -31,6 +32,10 @@ export default async function handler(req, res) {
     const monthStart = today.slice(0, 7) + "-01";
     const lo = [weekStart(today), monthStart, addDays(today, -1)].sort()[0];
     const all = await loadVisits(lo, today);
+    const reps = Object.values(users).filter((u) => u.role === "rep" && u.active !== false);
+    const todays = all.filter((v) => v.date === today);
+    // Worked out from the routes even when routes are hidden on the TV: only the numbers and alerts leave the server.
+    const watch = watchDay({ date: today, nowSec: Math.floor(Date.now() / 1000), users: reps, visits: todays, days, tracks, shops: Object.values(shops), dailyVisits: settings.dailyVisits });
     res.setHeader("Cache-Control", "no-store");
     res.json({
       today,
@@ -38,7 +43,8 @@ export default async function handler(req, res) {
       settings,
       users: Object.values(users).filter((u) => u.role === "rep").map(publicUser),
       shops: Object.values(shops).map((s) => ({ id: s.id, name: s.name, area: s.area, lat: s.lat, lng: s.lng, active: s.active })),
-      visits: all.filter((v) => v.date === today),
+      visits: todays,
+      watch,
       days,
       tracks: settings.tvRoutes ? tracks : {},
       board: buildBoard(all, users, settings.points, today),
