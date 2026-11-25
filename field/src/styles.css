@@ -664,4 +664,5 @@ label.check input { width: 22px; height: 22px; accent-color: var(--brand-deep); 
 .tv2-watch li time { font-family: var(--display); font-weight: 700; font-size: 0.95em; color: var(--t-muted); }
 .tv2-clear { display: flex; align-items: center; margin: 0.8em 0 0; font-size: 1.15em; color: var(--t-green); }
 .tv2-clear svg { width: 1.4em; height: 1.4em; margin-right: 0.5em; }
-.tv2-race dl > div:first-child { width: 8.6em; }
+.tv2-race dl > div:nth-child(2) { width: 8.2em; }
+.tv2-race dl > div:nth-child(3) { width: 6.8em; }

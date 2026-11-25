@@ -169,62 +169,64 @@ export default function TV() {
   );
 }
 
-// The month race: who is winning so far, by how much, and what it takes to catch up.
+// The month race, ranked by money: total value of orders taken this month.
+// Equal sales: more shops visited ranks higher. Store numbers sit beside it.
+const bySales = (rows) => rows.slice().sort((a, b) => b.value - a.value || b.visits - a.visits || a.name.localeCompare(b.name));
+const topSeller = (rows) => bySales(rows || []).find((r) => r.value > 0);
+
 function Race({ data }) {
-  const pts = (data.settings && data.settings.points) || { visit: 1, newShop: 1, firstOrder: 10, repeatOrder: 5 };
-  const rows = (data.board && data.board.month) || [];
+  const board = data.board || {};
+  const rows = bySales(board.month || []);
   const leader = rows[0];
-  const topPts = Math.max(1, ...rows.map((r) => r.points));
-  const todayLead = ((data.board && data.board.today) || []).find((r) => r.points > 0);
-  const ydayWin = ((data.board && data.board.yesterday) || []).find((r) => r.points > 0);
+  const topValue = Math.max(1, ...rows.map((r) => r.value));
+  const todayLead = topSeller(board.today);
+  const ydayWin = topSeller(board.yesterday);
   const left = daysLeft(data.today);
   return (
     <section className="tv2-race">
       <header>
-        <h2><Crown /> {monthName(data.today)} race</h2>
+        <h2><Crown /> {monthName(data.today)} sales race</h2>
         <span className="tv2-chip">{left === 0 ? "Last day!" : `${left} day${left > 1 ? "s" : ""} left`}</span>
-        {todayLead && <span className="tv2-chip hot">Today: {first(todayLead.name)} leads</span>}
-        {ydayWin && <span className="tv2-chip">Yesterday's winner: {first(ydayWin.name)}</span>}
+        {todayLead && <span className="tv2-chip hot">Today's top seller: {first(todayLead.name)}</span>}
+        {ydayWin && <span className="tv2-chip">Yesterday: {first(ydayWin.name)}</span>}
       </header>
       <ol>
         {rows.map((r, i) => {
-          // Points decide the race; on equal points, more sales wins (the board is already sorted that way).
-          const gap = leader ? leader.points - r.points : 0;
-          const toLead = Math.ceil((gap + 1) / Math.max(1, pts.firstOrder));
           const second = rows[1];
-          const tiedTop = !!second && rows[0].points === second.points && rows[0].value === second.value;
-          const leads = i === 0 && r.points > 0 && !tiedTop;
+          const tiedTop = !!second && rows[0].value === second.value && rows[0].visits === second.visits;
+          const leads = i === 0 && r.value > 0 && !tiedTop;
+          const behind = leader ? leader.value - r.value : 0;
+          const avg = r.orders ? r.value / r.orders : 0;
+          const ordersToLead = avg > 0 ? Math.ceil((behind + 1) / avg) : 0;
           let line;
-          if (r.points === 0) line = "No points yet. One shop visit gets you on the board.";
-          else if (tiedTop && gap === 0) line = "Tied for the lead. One more shop takes it.";
-          else if (i === 0 && second && second.points === r.points) line = `Winner so far · level on points, ahead on sales by ${money(r.value - second.value)}`;
-          else if (i === 0) line = second ? `Winner so far · ahead by ${r.points - second.points} pts` : "Winner so far";
-          else if (gap === 0) line = `Level on points · ${money(leader.value - r.value)} more sales takes the lead`;
-          else line = `${gap} pts behind ${first(leader.name)} · ${toLead} first order${toLead > 1 ? "s" : ""} takes the lead`;
+          if (r.value === 0) line = r.visits ? "No sales yet. Turn one interested shop into an order." : "No sales yet this month.";
+          else if (tiedTop && behind === 0) line = "Level at the top. The next order takes the lead.";
+          else if (i === 0) line = second ? `Top seller so far · ahead by ${money(r.value - second.value)}` : "Top seller so far";
+          else line = `${money(behind)} behind ${first(leader.name)}` + (ordersToLead ? ` · about ${ordersToLead} order${ordersToLead > 1 ? "s" : ""} of their usual size to take the lead` : "");
           return (
             <li key={r.email} className={leads ? "lead" : ""} style={{ "--rep": r.color }}>
               <span className="tv2-rank">{leads ? <Crown /> : null}<b>{i + 1}</b></span>
               <div className="tv2-runner">
                 <div className="tv2-runner-top">
                   <b>{r.name}</b>
-                  <strong>{r.points}<small> pts</small></strong>
+                  <strong><small>Rs </small>{rupees(r.value)}</strong>
                 </div>
-                <div className="tv2-bar"><i style={{ width: Math.max(3, (r.points / topPts) * 100) + "%" }} /></div>
+                <div className="tv2-bar"><i style={{ width: Math.max(3, (r.value / topValue) * 100) + "%" }} /></div>
                 <p>{line}</p>
               </div>
               <dl>
-                <div><dt>Sold</dt><dd className="gold"><small>Rs </small>{rupees(r.value)}</dd></div>
                 <div><dt>Orders</dt><dd>{r.orders}</dd></div>
-                <div><dt>Win rate</dt><dd>{pct(r.orders, r.visits)}<small>%</small></dd></div>
-                <div><dt>Shops/day</dt><dd>{r.days ? (r.visits / r.days).toFixed(1) : "0"}</dd></div>
+                <div><dt>Avg order</dt><dd><small>Rs </small>{rupees(avg)}</dd></div>
+                <div><dt>Shops visited</dt><dd>{r.visits}</dd></div>
                 <div><dt>New shops</dt><dd>{r.newShops}</dd></div>
+                <div><dt>Win rate</dt><dd>{pct(r.orders, r.visits)}<small>%</small></dd></div>
               </dl>
             </li>
           );
         })}
       </ol>
       <footer>
-        <TrendingUp /><span>How to climb: shop visit <b>{pts.visit}</b> · new shop <b>+{pts.newShop}</b> · first order <b>+{pts.firstOrder}</b> · repeat order <b>+{pts.repeatOrder}</b></span>
+        <TrendingUp /><span>Ranked by <b>total sales this month</b> (value of orders taken). Equal sales: more shops visited goes first.</span>
       </footer>
     </section>
   );
