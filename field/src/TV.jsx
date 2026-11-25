@@ -202,7 +202,7 @@ function Race({ data }) {
           if (r.value === 0) line = r.visits ? "No sales yet. Turn one interested shop into an order." : "No sales yet this month.";
           else if (tiedTop && behind === 0) line = "Level at the top. The next order takes the lead.";
           else if (i === 0) line = second ? `Top seller so far · ahead by ${money(r.value - second.value)}` : "Top seller so far";
-          else line = `${money(behind)} behind ${first(leader.name)}` + (ordersToLead ? ` · about ${ordersToLead} order${ordersToLead > 1 ? "s" : ""} of their usual size to take the lead` : "");
+          else line = `${money(behind)} behind ${first(leader.name)}` + (ordersToLead ? ` · ${ordersToLead} more order${ordersToLead > 1 ? "s" : ""} to lead` : "");
           return (
             <li key={r.email} className={leads ? "lead" : ""} style={{ "--rep": r.color }}>
               <span className="tv2-rank">{leads ? <Crown /> : null}<b>{i + 1}</b></span>
