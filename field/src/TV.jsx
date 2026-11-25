@@ -262,7 +262,7 @@ function RepCard({ r, visits }) {
         <Num icon={<Route />} value={kmText(r.metres)} unit="km" label={r.tracked ? "Travelled" : "No route"} dim={!r.tracked} />
       </div>
       <div className="tv2-ticks" aria-label={`${r.visits} of ${r.target} shops`}>
-        {ticks.map((v, i) => <i key={i} className={v ? "o-" + v.outcome : ""} />)}
+        {ticks.map((v, i) => <i key={i} className={v ? "o-" + (v.cancelled ? "no" : v.outcome) : ""} />)}
       </div>
       <footer>
         <span><Clock />{r.start ? `Start ${r.start}` : "Not started"}</span>

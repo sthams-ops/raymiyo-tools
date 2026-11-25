@@ -8,6 +8,7 @@ import { loadSettings, loadVisits, buildBoard, publicUser } from "../lib/data.js
 import { nepal, weekStart, addDays } from "../lib/time.js";
 import { loadTracks } from "../lib/track.js";
 import { watchDay } from "../shared/watch.js";
+import { checkCancellationsSoon } from "../lib/cancels.js";
 
 // Changes with every deploy: the TV reloads itself when it sees a new one.
 const VERSION = process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_GIT_COMMIT_SHA || String(Date.now());
@@ -24,6 +25,7 @@ export default async function handler(req, res) {
     if (secret.length < 12) return res.status(503).json({ error: "The TV link is not set up yet. Add FIELD_TV_KEY (12 or more characters) on the host." });
     if (!sameKey(req.query.key, secret)) return res.status(401).json({ error: "This TV link is not valid." });
 
+    checkCancellationsSoon(); // orders cancelled in CRM drop off the totals (at most every 10 minutes)
     const { date: today, time } = nepal();
     const [users, settings, shops, days, tracks] = await Promise.all([
       loadUsers(),

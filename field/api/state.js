@@ -2,6 +2,7 @@
 // check-ins for the chosen dates, today's locations and the leaderboards.
 // Field users only receive their own check-ins and location.
 import { store } from "../lib/store.js";
+import { checkCancellationsSoon } from "../lib/cancels.js";
 import { guard, loadUsers, fail, OWNER, DOMAIN } from "../lib/auth.js";
 import { loadSettings, loadVisits, buildBoard, publicUser } from "../lib/data.js";
 import { nepal, isDate, weekStart, addDays } from "../lib/time.js";
@@ -12,6 +13,7 @@ import { settle } from "../lib/sync.js";
 
 export default async function handler(req, res) {
   try {
+    checkCancellationsSoon(); // orders cancelled in CRM drop off the totals (at most every 10 minutes)
     const me = await guard(req, res);
     if (!me) return;
     const { date: today } = nepal();

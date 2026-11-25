@@ -143,6 +143,7 @@ h3 { font-size: 13.5px; font-weight: 700; color: var(--muted); margin-bottom: 8p
 .pill.o-interested { background: var(--warn); }
 .pill.o-no { background: var(--bad); }
 .pill.o-absent { background: var(--idle); }
+.pill.o-cancelled { background: #8a9590; text-decoration: line-through; }
 .pill.stage, .pill.role { background: var(--card); color: var(--muted); border: 1.5px solid var(--line); }
 .facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 14px; font-size: 14px; }
 .facts dt { color: var(--muted); }

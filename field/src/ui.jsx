@@ -177,7 +177,8 @@ export function FocusList({ items, users, canAct = true, reload, say, user = "",
   );
 }
 
-export function Pill({ outcome }) {
+export function Pill({ outcome, cancelled }) {
+  if (outcome === "order" && cancelled) return <span className="pill o-cancelled">Order cancelled</span>;
   return <span className={`pill o-${outcome}`}>{OUTCOMES[outcome] || outcome}</span>;
 }
 
@@ -200,7 +201,7 @@ export const firstName = (user) => ((user && user.name) || "").split(" ")[0] || 
 // onPick makes each row a button (the admin map uses it to show one person); picked is the chosen email.
 export function Board({ rows, big, onPick, picked }) {
   if (!rows || !rows.length) return <p className="muted">No field users on the team yet.</p>;
-  const max = Math.max(1, ...rows.map((r) => r.points));
+  const max = Math.max(1, ...rows.map((r) => r.value));
   return (
     <ol className={"board" + (big ? " big" : "")}>
       {rows.map((r, i) => (
@@ -213,21 +214,21 @@ export function Board({ rows, big, onPick, picked }) {
           onClick={onPick ? () => onPick(r.email) : undefined}
           onKeyDown={onPick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(r.email); } } : undefined}
         >
-          <span className={"rank" + (i === 0 && r.points > 0 ? " lead" : "")}>{i + 1}</span>
+          <span className={"rank" + (i === 0 && r.value > 0 ? " lead" : "")}>{i + 1}</span>
           <div className="who">
             <b>
               <Avatar user={r} size={big ? 40 : 26} /> {r.name}
             </b>
             <small>
-              {r.visits} visits · {r.orders} orders · {money(r.value)}
+              {r.visits} visits · {r.orders} orders{r.cancelled ? ` · ${r.cancelled} cancelled` : ""}
             </small>
             <div className="bar">
-              <i style={{ width: Math.round((r.points / max) * 100) + "%", background: r.color }} />
+              <i style={{ width: Math.round((r.value / max) * 100) + "%", background: r.color }} />
             </div>
           </div>
           <div className="pts">
-            {r.points}
-            <small>points</small>
+            {money(r.value)}
+            <small>sales</small>
           </div>
         </li>
       ))}
@@ -252,7 +253,7 @@ export function VisitRow({ v, shop, user, showRep, showDate, selected, onClick }
           {v.far ? " · far from shop" : ""}
         </small>
       </span>
-      <Pill outcome={v.outcome} />
+      <Pill outcome={v.outcome} cancelled={v.cancelled} />
     </Tag>
   );
 }

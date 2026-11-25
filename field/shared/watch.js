@@ -108,7 +108,7 @@ export function watchDay({ date, nowSec, users, visits, days = {}, tracks = {}, 
     const day = days[u.email] || {};
     const line = (tracks[u.email] || []).slice().sort((a, b) => a[2] - b[2]);
     const name = first(u);
-    const orders = mine.filter((v) => v.outcome === "order");
+    const orders = mine.filter((v) => v.outcome === "order" && !v.cancelled);
     const metresGone = routeMetres(line);
     const lastVisit = mine[mine.length - 1];
     const lastFix = line.length ? line[line.length - 1][2] : 0;

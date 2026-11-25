@@ -135,3 +135,11 @@ export async function fetchBalances(soIds) {
   const r = await send({ action: "balances", so_ids: soIds.join(",") });
   return r.status === "ok" ? r.out.balances || {} : null;
 }
+
+// The CRM status of each Sales Order: { soId: "Created" | "Approved" | "Delivered" | "Cancelled" | "Deleted" }.
+// null when CRM could not be asked (the function is an older copy, or Zoho is down).
+export async function fetchOrderStatuses(soIds) {
+  if (!soIds.length) return {};
+  const r = await send({ action: "statuses", so_ids: soIds.join(",") });
+  return r.status === "ok" && r.out.statuses && typeof r.out.statuses === "object" ? r.out.statuses : null;
+}

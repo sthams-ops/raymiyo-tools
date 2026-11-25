@@ -75,11 +75,11 @@ export function normalizeSettings(saved) {
 export function visitPoints(v, points) {
   let p = points.visit;
   if (v.newShop) p += points.newShop;
-  if (v.outcome === "order") p += v.first ? points.firstOrder : points.repeatOrder;
+  if (v.outcome === "order" && !v.cancelled) p += v.first ? points.firstOrder : points.repeatOrder;
   return p;
 }
 
-// One row per person, highest points first.
+// One row per person, highest sales first.
 export function scoreboard(visits, people, points) {
   const rows = new Map();
   for (const person of people) {
@@ -89,10 +89,11 @@ export function scoreboard(visits, people, points) {
     const r = rows.get(v.rep);
     if (!r) continue;
     r.visits += 1;
-    if (v.outcome === "order") {
+    if (v.outcome === "order" && !v.cancelled) {
       r.orders += 1;
       r.value += v.value || 0;
     }
+    if (v.outcome === "order" && v.cancelled) r.cancelled = (r.cancelled || 0) + 1;
     if (v.newShop) r.newShops += 1;
     if (v.far) r.far += 1;
     r._d.add(v.date);
@@ -102,7 +103,8 @@ export function scoreboard(visits, people, points) {
     r.days = r._d.size;
     delete r._d;
   }
-  return [...rows.values()].sort((a, b) => b.points - a.points || b.value - a.value || a.name.localeCompare(b.name));
+  // Ranked by money: sales (orders not cancelled), then shops visited.
+  return [...rows.values()].sort((a, b) => b.value - a.value || b.visits - a.visits || b.points - a.points || a.name.localeCompare(b.name));
 }
 
 // Straight-line distance in metres between [lat, lng] pairs.

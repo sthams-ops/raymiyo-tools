@@ -392,4 +392,40 @@ ok(r.code === 200 && r.data.visits.length === 1 && !("me" in r.data), "TV feed w
   ok(sat.alerts.length === 0 && sat.reps[0].status.kind === "off", "tv: Saturday has no time alerts");
 }
 
+// Orders cancelled in CRM come off sales, and the board is ranked by sales.
+{
+  const { scoreboard } = await import("../shared/rules.js");
+  const people = [{ email: "a@x", name: "Asha" }, { email: "b@x", name: "Bina" }];
+  const P = { visit: 1, newShop: 1, firstOrder: 10, repeatOrder: 5 };
+  const vs = [
+    { rep: "a@x", date: "2026-11-25", outcome: "order", value: 5000, first: true },
+    { rep: "a@x", date: "2026-11-25", outcome: "order", value: 9000, first: true, cancelled: true },
+    { rep: "b@x", date: "2026-11-25", outcome: "order", value: 7000, first: false },
+  ];
+  const rows = scoreboard(vs, people, P);
+  const a = rows.find((r) => r.email === "a@x");
+  ok(a.value === 5000 && a.orders === 1 && a.cancelled === 1 && a.visits === 2, "board: cancelled order keeps the visit, loses the money");
+  ok(rows[0].email === "b@x", "board: ranked by sales, not points");
+  ok(a.points === 1 + 10 + 1, "board: cancelled order earns no order points");
+}
+{
+  const { checkCancellations } = await import("../lib/cancels.js");
+  ok((await checkCancellations({ force: true })).checked === 0, "cancel check: does nothing when CRM is not connected");
+  // CRM connected (faked): one order cancelled, one deleted, one delivered.
+  const { nepal } = await import("../lib/time.js");
+  const m = nepal().month;
+  await store.hset("field:visits:" + m, "c1", { id: "c1", date: m + "-02", rep: "a@x", outcome: "order", value: 100, soId: "111" });
+  await store.hset("field:visits:" + m, "c2", { id: "c2", date: m + "-02", rep: "a@x", outcome: "order", value: 200, soId: "222" });
+  await store.hset("field:visits:" + m, "c3", { id: "c3", date: m + "-02", rep: "a@x", outcome: "order", value: 300, soId: "333" });
+  const realFetch = globalThis.fetch;
+  process.env.ZOHO_FIELD_API_KEY = "https://www.zohoapis.com/crm/v7/functions/field_shop_visit/actions/execute?auth_type=apikey&zapikey=test";
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ code: "success", details: { output: JSON.stringify({ statuses: { 111: "Cancelled", 222: "Deleted", 333: "Delivered" } }) } }) });
+  const res = await checkCancellations({ force: true });
+  globalThis.fetch = realFetch;
+  delete process.env.ZOHO_FIELD_API_KEY;
+  const g = await store.hall("field:visits:" + m);
+  ok(res.changed === 2 && g.c1.cancelled && g.c2.cancelled && !g.c3.cancelled && g.c3.soStatus === "Delivered", "cancel check: cancelled and deleted CRM orders are marked, delivered stays");
+  for (const id of ["c1", "c2", "c3"]) await store.hdel?.("field:visits:" + m, id);
+}
+
 console.log(`All ${passed} checks passed.`);
