@@ -561,13 +561,13 @@ label.check input { width: 22px; height: 22px; accent-color: var(--brand-deep); 
 .tv2-map { position: relative; min-height: 0; border-radius: 1.2em; overflow: hidden; box-shadow: 0 0 0 1px var(--rule), 0 1.2em 3em -1.5em rgba(0, 0, 0, 0.6); }
 .tv2 .map.map-tv2 { position: absolute; inset: 0; height: auto; min-height: 0; border: 0; border-radius: 0; box-shadow: none; font-size: 16px; }
 .tv2 .map-tv2 .maplibregl-ctrl-top-right, .tv2 .map-tv2 .map-fit { display: none; }
-.tv2-legend { position: absolute; left: 1em; bottom: 1em; display: flex; gap: 1.1em; margin: 0; padding: 0.55em 1em; list-style: none; border-radius: 0.8em; background: rgba(12, 31, 27, 0.86); backdrop-filter: blur(6px); font-size: 0.85em; font-weight: 600; }
+.tv2-legend { position: absolute; left: 1em; top: 1em; flex-wrap: wrap; max-width: calc(100% - 2em); display: flex; gap: 1.1em; margin: 0; padding: 0.55em 1em; list-style: none; border-radius: 0.8em; background: rgba(12, 31, 27, 0.86); backdrop-filter: blur(6px); font-size: 0.85em; font-weight: 600; }
 .tv2-legend li { display: flex; align-items: center; gap: 0.45em; }
 .tv2-legend i { width: 0.8em; height: 0.8em; border-radius: 50%; background: var(--idle); }
 .tv2-legend i.o-order { background: var(--ok); } .tv2-legend i.o-interested { background: var(--warn); } .tv2-legend i.o-no { background: var(--bad); }
 .tv2-legend i.flag { background: var(--t-red); box-shadow: 0 0 0 2px #fff inset; }
 .tv2-legend .note { color: var(--t-muted); font-weight: 500; }
-.tv2-toast { position: absolute; top: 1em; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 0.8em; padding: 0.7em 1.4em 0.7em 0.8em; border-radius: 99em; background: #fff; color: #15302a; box-shadow: 0 0 0 0.25em var(--rep), 0 1em 2.5em -0.8em rgba(0, 0, 0, 0.55); }
+.tv2-toast { position: absolute; top: 4.2em; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 0.8em; padding: 0.7em 1.4em 0.7em 0.8em; border-radius: 99em; background: #fff; color: #15302a; box-shadow: 0 0 0 0.25em var(--rep), 0 1em 2.5em -0.8em rgba(0, 0, 0, 0.55); }
 .tv2-toast p { margin: 0; }
 .tv2-toast b { display: block; font-family: var(--display); font-size: 1.2em; line-height: 1.1; }
 .tv2-toast span { font-size: 0.9em; font-weight: 600; color: #566b64; }

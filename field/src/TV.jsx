@@ -129,7 +129,7 @@ export default function TV() {
             <li><i className="o-no" /> Not interested</li>
             <li><i className="shop" /> Our shop, not visited today</li>
             {mapData.flags.length > 0 && <li><i className="flag" /> Check this</li>}
-            {!Object.keys(data.tracks || {}).length && <li className="note">Routes hidden on TV (Settings)</li>}
+            {!Object.keys(data.tracks || {}).length && <li className="note">Routes off</li>}
           </ul>
         </section>
 
