@@ -1,23 +1,30 @@
 // Office TV screen: open /tv?key=YOUR_KEY. No sign-in, refreshes by itself.
-// Built for a 16:9 TV seen from across the room: everything is sized from the
-// screen width, so the same page fills a 720p, 1080p or 4K screen.
+// Built for a 16:9 TV seen from across the room, and for the old browser inside
+// the office TV box: sizes come from the screen width, spacing uses margins
+// (that browser ignores "gap" in rows of items), and the map is TVMap (Leaflet).
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Banknote, Camera, Clock, MapPin, Route, ShieldCheck, ShoppingBag, Store, WifiOff } from "lucide-react";
+import { AlertTriangle, Banknote, Clock, Crown, MapPin, Route, ShieldCheck, ShoppingBag, Store, Target, TrendingUp, WifiOff } from "lucide-react";
 import { api } from "./api.js";
-import MapView from "./MapView.jsx";
+import TVMap from "./TVMap.jsx";
 import { buildMapData, indexBy } from "./mapdata.js";
 import { money, OUTCOMES } from "../shared/rules.js";
 
 const REFRESH_MS = 15000;
-const ALERTS_PER_PAGE = 4;
+const ALERTS_PER_PAGE = 3;
 const PAGE_MS = 9000;
-const FRESH_MS = 90000;
 
 const kmText = (m) => (m >= 1000 ? (m / 1000).toFixed(1) : (m / 1000).toFixed(2));
 const first = (name) => String(name || "").split(" ")[0];
 const longDay = (date) => new Date(date + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+const monthName = (date) => new Date(date + "T00:00:00").toLocaleDateString("en-GB", { month: "long" });
 const clockNow = () => new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kathmandu" });
 const rupees = (n) => Math.round(Number(n) || 0).toLocaleString("en-IN");
+const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+function daysLeft(date) {
+  const d = new Date(date + "T00:00:00Z");
+  const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+  return Math.round((end - d) / 86400000);
+}
 
 export default function TV() {
   const key = new URLSearchParams(window.location.search).get("key") || "";
@@ -27,7 +34,7 @@ export default function TV() {
   const [page, setPage] = useState(0);
   const [toast, setToast] = useState(null);
   const seen = useRef(null);
-  const freshAt = useRef({});
+  const version = useRef("");
 
   useEffect(() => {
     let alive = true;
@@ -36,11 +43,12 @@ export default function TV() {
         .tv(key)
         .then((d) => {
           if (!alive) return;
-          // A check-in that was not there on the last refresh gets the spotlight.
+          // A new version of the board was published: load it, so the TV never needs a restart.
+          if (d.version && version.current && d.version !== version.current) return window.location.reload();
+          version.current = d.version || version.current;
           const ids = new Set(d.visits.map((v) => v.id));
           if (seen.current) {
             const added = d.visits.filter((v) => !seen.current.has(v.id));
-            for (const v of added) freshAt.current[v.id] = Date.now();
             if (added.length) setToast(added[added.length - 1]);
           }
           seen.current = ids;
@@ -69,10 +77,9 @@ export default function TV() {
   const mapData = useMemo(() => {
     if (!data) return null;
     // No live position on the TV: where they checked in today, every other Raymiyo shop, and the route if switched on.
-    const base = { ...buildMapData({ visits: data.visits, shops: data.shops, users: data.users, days: {}, tracks: data.tracks, showShops: true }), live: [] };
-    base.dots = base.dots.map((d) => ({ ...d, title: d.title.replace("not visited in these dates", "not visited today") }));
+    const base = buildMapData({ visits: data.visits, shops: data.shops, users: data.users, days: {}, tracks: data.tracks, showShops: true });
     const flags = (data.watch ? data.watch.alerts : []).filter((a) => Number.isFinite(a.lat) && a.level !== "low").map((a, i) => ({ key: a.kind + i, lat: a.lat, lng: a.lng, level: a.level, title: a.title }));
-    return { ...base, flags };
+    return { pins: base.pins, dots: base.dots, routes: base.routes, flags };
   }, [data]);
 
   if (!data) return <div className="tv2 tv2-wait"><img src="/brand/raymiyo-mark.png" alt="" /><p>{err || "Loading the field board…"}</p></div>;
@@ -84,7 +91,6 @@ export default function TV() {
   const shownAlerts = serious.length ? serious : alerts;
   const pages = Math.max(1, Math.ceil(shownAlerts.length / ALERTS_PER_PAGE));
   const onPage = shownAlerts.slice((page % pages) * ALERTS_PER_PAGE, (page % pages) * ALERTS_PER_PAGE + ALERTS_PER_PAGE);
-  const latest = data.visits.slice(-6).reverse();
   const high = alerts.filter((a) => a.level === "high").length;
   const mid = alerts.filter((a) => a.level === "mid").length;
 
@@ -99,88 +105,63 @@ export default function TV() {
           </div>
         </div>
         <div className="tv2-team" aria-label="Team today">
-          <Total icon={<Store />} value={team.visits} label="Shops visited" />
-          <Total icon={<ShoppingBag />} value={team.orders} label="Orders" />
-          <Total icon={<Banknote />} value={rupees(team.amount)} unit="Rs" label="Order value" gold />
+          <Total icon={<Store />} value={team.visits} label="Shops today" />
+          <Total icon={<ShoppingBag />} value={team.orders} label="Orders today" />
+          <Total icon={<Banknote />} value={rupees(team.amount)} pre="Rs" label="Sold today" gold />
           <Total icon={<Route />} value={kmText(team.metres)} unit="km" label="Travelled" />
         </div>
         <div className={"tv2-clock" + (err ? " lost" : "")}>
           <b>{clock}</b>
-          <span>{err ? <><WifiOff /> Reconnecting…</> : <><i className="tv2-live" /> Live · {data.time}</>}</span>
+          <span>{err ? <><WifiOff /> Reconnecting</> : <><i className="tv2-live" /> Live</>}</span>
         </div>
       </header>
 
       <main className="tv2-main">
         <section className="tv2-map">
-          <MapView className="map-tv2" rich {...mapData} />
+          <TVMap {...mapData} />
           {toast && (
             <div className="tv2-toast" style={{ "--rep": (users[toast.rep] || {}).color }}>
-              <span className="tv2-avatar sm">{first((users[toast.rep] || {}).name)[0]}</span>
-              <p>
-                <b>{toast.shopName}</b>
-                <span>{first((users[toast.rep] || {}).name)} · {OUTCOMES[toast.outcome]}{toast.outcome === "order" ? " · " + money(toast.value) : ""}</span>
-              </p>
+              <b>{toast.shopName}</b>
+              <span>{first((users[toast.rep] || {}).name)} · {toast.outcome === "order" ? money(toast.value) : OUTCOMES[toast.outcome]}</span>
             </div>
           )}
           <ul className="tv2-legend">
-            <li><i className="o-order" /> Order</li>
-            <li><i className="o-interested" /> Interested</li>
-            <li><i className="o-absent" /> Owner absent</li>
-            <li><i className="o-no" /> Not interested</li>
-            <li><i className="shop" /> Our shop, not visited today</li>
-            {mapData.flags.length > 0 && <li><i className="flag" /> Check this</li>}
-            {!Object.keys(data.tracks || {}).length && <li className="note">Routes off</li>}
+            <li><i className="o-order" />Order</li>
+            <li><i className="o-interested" />Interested</li>
+            <li><i className="o-absent" />Absent</li>
+            <li><i className="o-no" />No</li>
+            <li><i className="shop" />Our shop</li>
           </ul>
         </section>
 
-        <section className="tv2-side">
-          <div className="tv2-reps">
-            {reps.map((r) => <RepCard key={r.email} r={r} visits={data.visits.filter((v) => v.rep === r.email)} />)}
-          </div>
-          <div className="tv2-watch">
-            <h2>
-              <ShieldCheck /> Watch list
-              {high > 0 && <em className="hi">{high} serious</em>}
-              {mid > 0 && <em className="md">{mid} to check</em>}
-              {pages > 1 && <small>{(page % pages) + 1} / {pages}</small>}
-            </h2>
-            {shownAlerts.length === 0 ? (
-              <p className="tv2-clear"><ShieldCheck /> Nothing unusual so far today.</p>
-            ) : (
-              <ol key={page % pages}>
-                {onPage.map((a, i) => (
-                  <li key={a.kind + a.rep + i} className={"lv-" + a.level} style={{ "--rep": (users[a.rep] || {}).color }}>
-                    <AlertTriangle />
-                    <div>
-                      <b>{a.title}</b>
-                      {a.detail && <span>{a.detail}</span>}
-                    </div>
-                    {a.at && <time>{a.at}</time>}
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
+        <section className="tv2-reps">
+          {reps.map((r) => <RepCard key={r.email} r={r} visits={data.visits.filter((v) => v.rep === r.email)} />)}
         </section>
 
-        <section className="tv2-strip" aria-label="Latest check-ins">
-          {latest.length === 0 ? (
-            <p className="tv2-empty"><Camera /> Shelf photos appear here as shops are checked in.</p>
+        <Race data={data} />
+
+        <section className="tv2-watch">
+          <h2>
+            <ShieldCheck /> Watch list
+            {high > 0 && <em className="hi">{high} serious</em>}
+            {mid > 0 && <em className="md">{mid} to check</em>}
+            {pages > 1 && <small>{(page % pages) + 1}/{pages}</small>}
+          </h2>
+          {shownAlerts.length === 0 ? (
+            <p className="tv2-clear"><ShieldCheck /> All clear so far today</p>
           ) : (
-            latest.map((v) => {
-              const u = users[v.rep] || {};
-              const fresh = Date.now() - (freshAt.current[v.id] || 0) < FRESH_MS;
-              return (
-                <figure key={v.id} className={"tv2-shot" + (fresh ? " fresh" : "")} style={{ "--rep": u.color }}>
-                  {v.photo ? <img src={v.photo} alt="" loading="lazy" decoding="async" /> : <div className="tv2-nophoto">{(v.shopName || "?")[0]}</div>}
-                  <figcaption>
-                    <span className={"pill o-" + v.outcome}>{v.outcome === "order" ? money(v.value) : OUTCOMES[v.outcome]}</span>
-                    <b>{v.shopName}</b>
-                    <small><i style={{ background: u.color }} />{first(u.name)} · {v.time}{v.area ? " · " + v.area : ""}</small>
-                  </figcaption>
-                </figure>
-              );
-            })
+            <ol key={page % pages}>
+              {onPage.map((a, i) => (
+                <li key={a.kind + a.rep + i} className={"lv-" + a.level}>
+                  <AlertTriangle />
+                  <div>
+                    <b>{a.title}</b>
+                    {a.detail && <span>{a.detail}</span>}
+                  </div>
+                  {a.at && <time>{a.at}</time>}
+                </li>
+              ))}
+            </ol>
           )}
         </section>
       </main>
@@ -188,12 +169,73 @@ export default function TV() {
   );
 }
 
-function Total({ icon, value, unit, label, gold }) {
+// The month race: who is winning so far, by how much, and what it takes to catch up.
+function Race({ data }) {
+  const pts = (data.settings && data.settings.points) || { visit: 1, newShop: 1, firstOrder: 10, repeatOrder: 5 };
+  const rows = (data.board && data.board.month) || [];
+  const leader = rows[0];
+  const topPts = Math.max(1, ...rows.map((r) => r.points));
+  const todayLead = ((data.board && data.board.today) || []).find((r) => r.points > 0);
+  const ydayWin = ((data.board && data.board.yesterday) || []).find((r) => r.points > 0);
+  const left = daysLeft(data.today);
+  return (
+    <section className="tv2-race">
+      <header>
+        <h2><Crown /> {monthName(data.today)} race</h2>
+        <span className="tv2-chip">{left === 0 ? "Last day!" : `${left} day${left > 1 ? "s" : ""} left`}</span>
+        {todayLead && <span className="tv2-chip hot">Today: {first(todayLead.name)} leads</span>}
+        {ydayWin && <span className="tv2-chip">Yesterday's winner: {first(ydayWin.name)}</span>}
+      </header>
+      <ol>
+        {rows.map((r, i) => {
+          // Points decide the race; on equal points, more sales wins (the board is already sorted that way).
+          const gap = leader ? leader.points - r.points : 0;
+          const toLead = Math.ceil((gap + 1) / Math.max(1, pts.firstOrder));
+          const second = rows[1];
+          const tiedTop = !!second && rows[0].points === second.points && rows[0].value === second.value;
+          const leads = i === 0 && r.points > 0 && !tiedTop;
+          let line;
+          if (r.points === 0) line = "No points yet. One shop visit gets you on the board.";
+          else if (tiedTop && gap === 0) line = "Tied for the lead. One more shop takes it.";
+          else if (i === 0 && second && second.points === r.points) line = `Winner so far · level on points, ahead on sales by ${money(r.value - second.value)}`;
+          else if (i === 0) line = second ? `Winner so far · ahead by ${r.points - second.points} pts` : "Winner so far";
+          else if (gap === 0) line = `Level on points · ${money(leader.value - r.value)} more sales takes the lead`;
+          else line = `${gap} pts behind ${first(leader.name)} · ${toLead} first order${toLead > 1 ? "s" : ""} takes the lead`;
+          return (
+            <li key={r.email} className={leads ? "lead" : ""} style={{ "--rep": r.color }}>
+              <span className="tv2-rank">{leads ? <Crown /> : null}<b>{i + 1}</b></span>
+              <div className="tv2-runner">
+                <div className="tv2-runner-top">
+                  <b>{r.name}</b>
+                  <strong>{r.points}<small> pts</small></strong>
+                </div>
+                <div className="tv2-bar"><i style={{ width: Math.max(3, (r.points / topPts) * 100) + "%" }} /></div>
+                <p>{line}</p>
+              </div>
+              <dl>
+                <div><dt>Sold</dt><dd className="gold"><small>Rs </small>{rupees(r.value)}</dd></div>
+                <div><dt>Orders</dt><dd>{r.orders}</dd></div>
+                <div><dt>Win rate</dt><dd>{pct(r.orders, r.visits)}<small>%</small></dd></div>
+                <div><dt>Shops/day</dt><dd>{r.days ? (r.visits / r.days).toFixed(1) : "0"}</dd></div>
+                <div><dt>New shops</dt><dd>{r.newShops}</dd></div>
+              </dl>
+            </li>
+          );
+        })}
+      </ol>
+      <footer>
+        <TrendingUp /><span>How to climb: shop visit <b>{pts.visit}</b> · new shop <b>+{pts.newShop}</b> · first order <b>+{pts.firstOrder}</b> · repeat order <b>+{pts.repeatOrder}</b></span>
+      </footer>
+    </section>
+  );
+}
+
+function Total({ icon, value, unit, pre, label, gold }) {
   return (
     <div className={"tv2-total" + (gold ? " gold" : "")}>
       {icon}
       <p>
-        <b>{unit === "Rs" && <small>Rs </small>}{value}{unit === "km" && <small> km</small>}</b>
+        <b>{pre && <small>{pre} </small>}{value}{unit && <small> {unit}</small>}</b>
         <span>{label}</span>
       </p>
     </div>
@@ -207,23 +249,23 @@ function RepCard({ r, visits }) {
       <header>
         <span className="tv2-avatar">{first(r.name)[0]}</span>
         <div>
-          <b>{r.name}</b>
+          <b>{first(r.name)} <small>today</small></b>
           <span className="tv2-status"><i />{r.status.label}</span>
         </div>
       </header>
       <div className="tv2-nums">
-        <Num icon={<Route />} value={kmText(r.metres)} unit="km" label={r.tracked ? "Travelled" : "No route yet"} dim={!r.tracked} />
-        <Num icon={<Store />} value={r.visits} unit={`/ ${r.target}`} label="Shops visited" />
-        <Num icon={<ShoppingBag />} value={r.orders} unit={r.firstOrders ? `${r.firstOrders} new` : ""} label="Orders" />
-        <Num icon={<Banknote />} value={rupees(r.amount)} pre="Rs" label="Order value" gold />
+        <Num icon={<Store />} value={r.visits} unit={`/ ${r.target}`} label="Shops" />
+        <Num icon={<ShoppingBag />} value={r.orders} label="Orders" />
+        <Num icon={<Banknote />} value={rupees(r.amount)} pre="Rs" label="Sold" gold />
+        <Num icon={<Route />} value={kmText(r.metres)} unit="km" label={r.tracked ? "Travelled" : "No route"} dim={!r.tracked} />
       </div>
       <div className="tv2-ticks" aria-label={`${r.visits} of ${r.target} shops`}>
         {ticks.map((v, i) => <i key={i} className={v ? "o-" + v.outcome : ""} />)}
       </div>
       <footer>
-        <span><Clock /> {r.start ? `Start ${r.start}` : "Not started"}</span>
-        <span><MapPin /> {r.firstAt ? `First shop ${r.firstAt}` : "No shop yet"}</span>
-        <span><Store /> {r.newShops} new</span>
+        <span><Clock />{r.start ? `Start ${r.start}` : "Not started"}</span>
+        <span><MapPin />{r.firstAt ? `1st shop ${r.firstAt}` : "No shop yet"}</span>
+        <span><Target />{pct(r.visits, r.target)}% of target</span>
       </footer>
     </article>
   );
@@ -237,4 +279,3 @@ function Num({ icon, value, unit, pre, label, gold, dim }) {
     </div>
   );
 }
-

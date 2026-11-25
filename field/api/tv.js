@@ -9,6 +9,9 @@ import { nepal, weekStart, addDays } from "../lib/time.js";
 import { loadTracks } from "../lib/track.js";
 import { watchDay } from "../shared/watch.js";
 
+// Changes with every deploy: the TV reloads itself when it sees a new one.
+const VERSION = process.env.RAILWAY_DEPLOYMENT_ID || process.env.RAILWAY_GIT_COMMIT_SHA || String(Date.now());
+
 function sameKey(a, b) {
   const x = Buffer.from(String(a || ""));
   const y = Buffer.from(String(b || ""));
@@ -38,6 +41,7 @@ export default async function handler(req, res) {
     const watch = watchDay({ date: today, nowSec: Math.floor(Date.now() / 1000), users: reps, visits: todays, days, tracks, shops: Object.values(shops), dailyVisits: settings.dailyVisits });
     res.setHeader("Cache-Control", "no-store");
     res.json({
+      version: VERSION,
       today,
       time,
       settings,
