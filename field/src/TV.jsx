@@ -68,7 +68,9 @@ export default function TV() {
 
   const mapData = useMemo(() => {
     if (!data) return null;
-    const base = buildMapData({ visits: data.visits, shops: data.shops, users: data.users, days: data.days, tracks: data.tracks, showShops: false });
+    // No live position on the TV: where they checked in today, every other Raymiyo shop, and the route if switched on.
+    const base = { ...buildMapData({ visits: data.visits, shops: data.shops, users: data.users, days: {}, tracks: data.tracks, showShops: true }), live: [] };
+    base.dots = base.dots.map((d) => ({ ...d, title: d.title.replace("not visited in these dates", "not visited today") }));
     const flags = (data.watch ? data.watch.alerts : []).filter((a) => Number.isFinite(a.lat) && a.level !== "low").map((a, i) => ({ key: a.kind + i, lat: a.lat, lng: a.lng, level: a.level, title: a.title }));
     return { ...base, flags };
   }, [data]);
@@ -110,7 +112,7 @@ export default function TV() {
 
       <main className="tv2-main">
         <section className="tv2-map">
-          <MapView className="map-tv2" {...mapData} />
+          <MapView className="map-tv2" rich {...mapData} />
           {toast && (
             <div className="tv2-toast" style={{ "--rep": (users[toast.rep] || {}).color }}>
               <span className="tv2-avatar sm">{first((users[toast.rep] || {}).name)[0]}</span>
@@ -125,6 +127,7 @@ export default function TV() {
             <li><i className="o-interested" /> Interested</li>
             <li><i className="o-absent" /> Owner absent</li>
             <li><i className="o-no" /> Not interested</li>
+            <li><i className="shop" /> Our shop, not visited today</li>
             {mapData.flags.length > 0 && <li><i className="flag" /> Check this</li>}
             {!Object.keys(data.tracks || {}).length && <li className="note">Routes hidden on TV (Settings)</li>}
           </ul>

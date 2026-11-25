@@ -62,18 +62,36 @@ export const PLACE_LAYERS = [
 // Stock place layers and the zoom they now start at.
 const EARLIER = { poi_r1: 13, poi_r7: 14, poi_r20: 15 };
 
-function showPlaces(m) {
-  for (const [id, zoom] of Object.entries(EARLIER)) {
+// rich: the office TV, seen from across the room. Shops, pharmacies and street
+// names appear from further out and in bigger letters, like a printed street map.
+function showPlaces(m, rich) {
+  const earlier = rich ? { poi_r1: 11.5, poi_r7: 12.5, poi_r20: 13 } : EARLIER;
+  for (const [id, zoom] of Object.entries(earlier)) {
     try {
       if (!m.getLayer(id)) continue;
       m.setLayerZoomRange(id, zoom, 24);
       m.setLayoutProperty(id, "text-font", ["Noto Sans Regular"]);
       m.setPaintProperty(id, "text-color", "#3d4f49");
       m.setPaintProperty(id, "text-halo-width", 1.4);
+      if (rich) m.setLayoutProperty(id, "text-size", 13);
     } catch {}
   }
+  if (rich) {
+    for (const id of ["highway-name-minor", "highway-name-major", "highway-name-path"]) {
+      try {
+        if (m.getLayer(id)) m.setLayoutProperty(id, "text-size", ["interpolate", ["linear"], ["zoom"], 13, 11, 15, 14, 17, 16]);
+      } catch {}
+    }
+  }
+  const layers = rich
+    ? PLACE_LAYERS.map((l) =>
+        l.id === "biz-dot"
+          ? { ...l, minzoom: 11.5, paint: { ...l.paint, "circle-radius": ["interpolate", ["linear"], ["zoom"], 11.5, 2.5, 14, 5, 17, 8] } }
+          : { ...l, minzoom: 12.8, layout: { ...l.layout, "text-size": ["interpolate", ["linear"], ["zoom"], 12.8, 11, 15, 14, 17, 16] } }
+      )
+    : PLACE_LAYERS;
   try {
-    if (m.getSource("openmaptiles")) for (const layer of PLACE_LAYERS) if (!m.getLayer(layer.id)) m.addLayer(layer);
+    if (m.getSource("openmaptiles")) for (const layer of layers) if (!m.getLayer(layer.id)) m.addLayer(layer);
   } catch {}
 }
 
@@ -93,7 +111,7 @@ const routeData = (routes) => ({
   features: routes.map((r) => ({ type: "Feature", properties: { color: r.color }, geometry: { type: "LineString", coordinates: r.coords } })),
 });
 
-export default function MapView({ pins = [], dots = [], live = [], routes = [], flags = [], heat = [], showHeat = false, focus = "", legend = false, selected, onSelect, className = "", children }) {
+export default function MapView({ pins = [], dots = [], live = [], routes = [], flags = [], heat = [], showHeat = false, focus = "", legend = false, rich = false, selected, onSelect, className = "", children }) {
   const box = useRef(null);
   const map = useRef(null);
   const marks = useRef([]);
@@ -113,7 +131,7 @@ export default function MapView({ pins = [], dots = [], live = [], routes = [], 
       m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
       m.once("load", () => {
         ready = true;
-        showPlaces(m);
+        showPlaces(m, rich);
         // Routes sit under the pins: a white edge with the person's colour on top.
         // Heat: where time was spent. Green is light, gold is busy, red is where they stayed longest.
         m.addSource("heat", { type: "geojson", data: heatData(latestHeat.current) });

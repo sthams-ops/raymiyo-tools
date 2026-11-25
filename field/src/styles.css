@@ -657,3 +657,5 @@ label.check input { width: 22px; height: 22px; accent-color: var(--brand-deep); 
   .tv2-strip { grid-template-columns: repeat(3, 1fr); grid-auto-rows: 12em; }
 }
 .tv2 .map-problem { left: 1em; right: auto; top: 1em; bottom: auto; max-width: 22em; padding: 0.5em 0.8em; border-radius: 0.6em; background: rgba(12, 31, 27, 0.88); color: var(--t-muted); font-size: 13px; }
+.tv2-legend i.shop { background: #fff; box-shadow: inset 0 0 0 0.2em var(--idle); }
+.tv2 .map-dot { width: 13px; height: 13px; border-width: 3.5px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); }
