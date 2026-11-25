@@ -61,6 +61,8 @@ const server = http.createServer(async (req, res) => {
     // Short link for the team: field.raymiyo.com/app always gives the newest Android app file.
     if (url.pathname === "/app") return res.writeHead(302, { Location: "https://github.com/sthams-ops/raymiyo-tools/releases/latest/download/Raymiyo-Field.apk", "Cache-Control": "no-store" }).end();
 
+    // Which browser the office TV uses, so problems with old TV boxes can be found.
+    if (url.pathname === "/tv") console.log("TV page opened by:", String(req.headers["user-agent"] || "unknown").slice(0, 200));
     if (url.pathname === "/health") return res.writeHead(200, { "Content-Type": "text/plain" }).end("ok");
 
     if (url.pathname.startsWith("/api/")) {

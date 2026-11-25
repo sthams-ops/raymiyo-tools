@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import legacy from "@vitejs/plugin-legacy";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -20,6 +21,9 @@ function shellList() {
 }
 
 export default defineConfig({
-  plugins: [react(), shellList()],
-  build: { chunkSizeWarningLimit: 1600 },
+  // legacy: a second copy of the app for older built-in browsers, such as the one
+  // inside the OptiSigns app on the office TV box. Modern phones keep the fast copy.
+  plugins: [react(), legacy({ targets: ["chrome >= 49", "android >= 5", "safari >= 11"], modernPolyfills: true }), shellList()],
+  // cssTarget: older browsers also get layout rules they understand (inset -> top/left...).
+  build: { chunkSizeWarningLimit: 1600, cssTarget: ["chrome61", "safari11"] },
 });
