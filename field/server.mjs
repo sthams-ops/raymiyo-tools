@@ -103,4 +103,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 const port = Number(process.env.PORT) || 4173;
-server.listen(port, "0.0.0.0", () => console.log(`Raymiyo Field running on port ${port}`));
+server.listen(port, "0.0.0.0", () => {
+  console.log(`Raymiyo Field running on port ${port}`);
+  if (process.env.RAILWAY_ENVIRONMENT) import("./lib/diagnose.js").then((m) => setTimeout(m.diagnose, 3000));
+});
