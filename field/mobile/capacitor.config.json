@@ -1,0 +1,14 @@
+{
+  "appId": "com.raymiyo.field",
+  "appName": "Raymiyo Field",
+  "webDir": "www",
+  "server": {
+    "url": "https://field.raymiyo.com",
+    "androidScheme": "https",
+    "allowNavigation": ["field.raymiyo.com", "accounts.zoho.com", "*.zoho.com"],
+    "errorPath": "offline.html"
+  },
+  "android": {
+    "useLegacyBridge": true
+  }
+}

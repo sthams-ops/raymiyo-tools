@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Raymiyo Field</string>
+    <string name="title_activity_main">Raymiyo Field</string>
+    <string name="package_name">com.raymiyo.field</string>
+    <string name="custom_url_scheme">com.raymiyo.field</string>
+    <!-- The permanent notification shown while live tracking is on. -->
+    <string name="capacitor_background_geolocation_notification_channel_name">Live location</string>
+    <string name="capacitor_background_geolocation_notification_icon">drawable/ic_tracking</string>
+    <string name="capacitor_background_geolocation_notification_color">#38645B</string>
+</resources>
