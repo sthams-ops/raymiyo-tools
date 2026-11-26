@@ -143,7 +143,8 @@ export async function fetchOrderStatuses(soIds) {
   // CRM looks each order up one by one, so ask 5 at a time and give it time to answer.
   const all = {};
   for (let i = 0; i < soIds.length; i += 5) {
-    const r = await send({ action: "statuses", so_ids: soIds.slice(i, i + 5).join(",") }, 30000);
+    // visit_id: the CRM function pasted on 25 Nov checks for one before it reaches "statuses".
+    const r = await send({ action: "statuses", visit_id: "status-check", so_ids: soIds.slice(i, i + 5).join(",") }, 30000);
     if (r.status !== "ok" || !r.out.statuses || typeof r.out.statuses !== "object") {
       console.error("Order status check: CRM did not answer:", r.detail || JSON.stringify(r.out || {}).slice(0, 200));
       return null;

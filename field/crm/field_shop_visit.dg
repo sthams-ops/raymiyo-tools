@@ -69,6 +69,36 @@ string standalone.field_shop_visit(string crmAPIRequest)
 			return out.toString();
 		}
 		// ---- Cash or a cheque was collected: put it on the order's Invoice ----
+		// ---- The app asks the status of its Sales Orders (to drop cancelled ones from sales) ----
+		if(action == "statuses")
+		{
+			stMap = Map();
+			stText = ifnull(p.get("so_ids"),"").toString();
+			for each  stKey in stText.toList(",")
+			{
+				if(stKey != "")
+				{
+					try
+					{
+						soRec = zoho.crm.getRecordById("Sales_Orders",stKey.toLong());
+						if(soRec != null && soRec.get("id") != null)
+						{
+							stMap.put(stKey,ifnull(soRec.get("Status"),""));
+						}
+						else
+						{
+							stMap.put(stKey,"Deleted");
+						}
+					}
+					catch (e9)
+					{
+						stMap.put(stKey,"Deleted");
+					}
+				}
+			}
+			out.put("statuses",stMap);
+			return out.toString();
+		}
 		if(action == "collect")
 		{
 			soId = ifnull(p.get("crm_so_id"),"").toString();
@@ -187,36 +217,6 @@ string standalone.field_shop_visit(string crmAPIRequest)
 		}
 		accId = ifnull(p.get("crm_account_id"),"");
 		stage = ifnull(p.get("shop_stage"),"");
-		// ---- The app asks the status of its Sales Orders (to drop cancelled ones from sales) ----
-		if(action == "statuses")
-		{
-			stMap = Map();
-			stText = ifnull(p.get("so_ids"),"").toString();
-			for each  stKey in stText.toList(",")
-			{
-				if(stKey != "")
-				{
-					try
-					{
-						soRec = zoho.crm.getRecordById("Sales_Orders",stKey.toLong());
-						if(soRec != null && soRec.get("id") != null)
-						{
-							stMap.put(stKey,ifnull(soRec.get("Status"),""));
-						}
-						else
-						{
-							stMap.put(stKey,"Deleted");
-						}
-					}
-					catch (e9)
-					{
-						stMap.put(stKey,"Deleted");
-					}
-				}
-			}
-			out.put("statuses",stMap);
-			return out.toString();
-		}
 		// ---- The follow-up was ticked off in the app ----
 		if(action == "done")
 		{
