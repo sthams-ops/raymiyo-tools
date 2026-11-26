@@ -1,4 +1,5 @@
 // Turns saved data into what the map draws, plus small date helpers.
+import { cleanRoute, routeDistance } from "../shared/distance.js";
 import { OUTCOMES } from "../shared/rules.js";
 import { firstName } from "./ui.jsx";
 
@@ -19,7 +20,15 @@ const metres = (a, b) => {
 };
 
 // Distance and times for one person's saved route lines ([[lat, lng, seconds], ...] per day).
-export function routeStats(lines) {
+// lines: one route per day; extras: that day's check-ins [[lat, lng, seconds], ...] (same order).
+// A person's check-ins as accurate route points: [[lat, lng, seconds], ...]. date "" = any day.
+export function checkins(visits, email, date) {
+  return (visits || [])
+    .filter((v) => v.rep === email && (!date || v.date === date) && Number.isFinite(v.lat) && Number.isFinite(v.lng))
+    .map((v) => [v.lat, v.lng, Math.floor(Date.parse(`${v.date}T${v.time}:00+05:45`) / 1000)]);
+}
+
+export function routeStats(lines, extras = []) {
   let m = 0;
   let first = 0;
   let last = 0;
@@ -27,7 +36,7 @@ export function routeStats(lines) {
   for (const line of lines) {
     if (!Array.isArray(line) || !line.length) continue;
     points += line.length;
-    for (let i = 1; i < line.length; i++) m += metres(line[i - 1], line[i]);
+    m += routeDistance(line, extras[lines.indexOf(line)] || []);
     if (!first || line[0][2] < first) first = line[0][2];
     if (line[line.length - 1][2] > last) last = line[line.length - 1][2];
   }
@@ -74,7 +83,9 @@ export function buildMapData({ visits, shops, users, days, tracks, trackDays, sh
   for (const [date, set] of sets) {
     for (const [email, line] of Object.entries(set || {})) {
       if (!people[email] || !Array.isArray(line)) continue;
-      if (line.length > 1) routes.push({ key: email + date, color: people[email].color, coords: line.map((p) => [p[1], p[0]]) });
+      // The drawn line is the cleaned route: no GPS jumps or rough network spots.
+      const drawn = cleanRoute(line, checkins(visits, email, date));
+      if (drawn.length > 1) routes.push({ key: email + date, color: people[email].color, coords: drawn.map((p) => [p[1], p[0]]) });
       // Heat follows time, not distance: a point passed while walking is faint,
       // minutes spent in one place add up and glow.
       for (let i = 0; i < line.length; i++) {

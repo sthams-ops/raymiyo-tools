@@ -428,4 +428,27 @@ ok(r.code === 200 && r.data.visits.length === 1 && !("me" in r.data), "TV feed w
   for (const id of ["c1", "c2", "c3"]) await store.hdel?.("field:visits:" + m, id);
 }
 
+// Distance: cleaned like fitness apps (no jitter, spikes, teleports or rough network spots).
+{
+  const { routeDistance, cleanRoute } = await import("../shared/distance.js");
+  const t0 = 1795588000;
+  const walk = []; // 1 km due north in 25 m steps, 15 s apart
+  for (let i = 0; i <= 40; i++) walk.push([27.70 + i * 0.000225, 85.30, t0 + i * 15]);
+  const w = routeDistance(walk);
+  ok(Math.abs(w - 1000) < 30, "distance: a straight 1 km walk is about 1 km (" + w + " m)");
+  const shop = []; // 20 minutes inside a shop, GPS wobbling 30 m
+  for (let i = 0; i < 40; i++) shop.push([27.71 + (i % 2 ? 0.00027 : 0) + i * 1e-6, 85.30 + (i % 3 ? 0.0002 : 0), t0 + 2000 + i * 30]);
+  ok(routeDistance(shop) < 40, "distance: wobble while standing in a shop adds nothing");
+  const spike = walk.slice(0, 20).concat([[27.72, 85.32, t0 + 20 * 15 + 5]], walk.slice(20).map((p) => [p[0], p[1], p[2] + 10]));
+  ok(Math.abs(routeDistance(spike) - w) < 40, "distance: a GPS jump out and back is ignored");
+  const net = walk.slice();
+  for (let i = 0; i < 6; i++) net.push([27.75, 85.35, t0 + 1000 + i * 60], [27.751, 85.352, t0 + 1030 + i * 60]);
+  ok(Math.abs(routeDistance(net.sort((a, b) => a[2] - b[2])) - w) < 40, "distance: rough network spots repeating again and again are ignored");
+  const weak = walk.map((p, i) => (i === 10 ? [p[0] + 0.003, p[1], p[2], 120] : [...p, 8]));
+  ok(Math.abs(routeDistance(weak) - w) < 40, "distance: a weak fix (±120 m) is ignored");
+  const gap = [[27.70, 85.30, t0], [27.70, 85.30, t0 + 60]];
+  ok(Math.abs(routeDistance(gap, [[27.709, 85.30, t0 + 600]]) - 1000) < 20, "distance: check-ins fill gaps in the route");
+  ok(cleanRoute(shop).length === 1, "distance: a stop becomes one point on the map");
+}
+
 console.log(`All ${passed} checks passed.`);

@@ -4,8 +4,14 @@
 //   2. Spikes are dropped: a point that jumps far away and straight back.
 //   3. Teleports are dropped: a jump faster than a scooter can go (70 km/h),
 //      unless the next points stay at the new place (then it was real).
-//   4. Standing still is one point: GPS wobbles 20–60 m while someone is inside
-//      a shop. Points that stay within 50 m of each other become one stop.
+//   4. Rough "network" fixes are dropped: when GPS is weak, phones fall back to
+//      Wi-Fi/tower positions that repeat the exact same spot again and again.
+//      Real GPS never lands on the identical point 3 times in a day.
+//   5. Check-in locations are added: each check-in is an accurate GPS fix at a
+//      known time, so they fill the gaps when the phone's route is rough.
+//   6. Standing still is one point: GPS wobbles 20–60 m while someone is inside
+//      a shop. Points that stay within 50 m for 90 seconds or more become one stop;
+//      walking keeps every point.
 // What is left is added up point to point. Points arrive every ~25 m of
 // movement, so the line follows the roads closely.
 //
@@ -18,14 +24,21 @@ export const CLEAN = {
   maxKmh: 70,
   confirmMeters: 150,
   stayMeters: 50,
+  staySeconds: 90,
+  repeatsMeanNetwork: 3,
 };
 
 const d = (a, b) => distanceMeters([a[0], a[1]], [b[0], b[1]]);
 
-export function cleanRoute(line) {
+// extra: accurate points from elsewhere (check-ins) [[lat, lng, seconds], ...]
+export function cleanRoute(line, extra = []) {
   let pts = (line || []).filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]) && Number.isFinite(p[2]));
-  pts = pts.slice().sort((a, b) => a[2] - b[2]);
   pts = pts.filter((p) => !(p[3] > CLEAN.maxAccuracy));
+  const seen = {};
+  for (const p of pts) seen[p[0] + "," + p[1]] = (seen[p[0] + "," + p[1]] || 0) + 1;
+  pts = pts.filter((p) => seen[p[0] + "," + p[1]] < CLEAN.repeatsMeanNetwork);
+  const sure = (extra || []).filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]) && Number.isFinite(p[2])).map((p) => [p[0], p[1], p[2], 0, true]);
+  pts = pts.concat(sure).sort((a, b) => a[2] - b[2]);
 
   // 2. Spikes: out and straight back.
   let changed = true;
@@ -38,7 +51,7 @@ export function cleanRoute(line) {
       const c = pts[i + 1];
       const ab = d(a, b);
       const bc = d(b, c);
-      if (ab > CLEAN.spikeMeters && bc > CLEAN.spikeMeters && d(a, c) < 0.35 * (ab + bc)) {
+      if (!b[4] && ab > CLEAN.spikeMeters && bc > CLEAN.spikeMeters && d(a, c) < 0.35 * (ab + bc)) {
         changed = true;
         continue;
       }
@@ -59,7 +72,7 @@ export function cleanRoute(line) {
     }
     const dist = d(last, p);
     const secs = Math.max(1, p[2] - last[2]);
-    if ((dist / secs) * 3.6 > CLEAN.maxKmh && dist > CLEAN.spikeMeters) {
+    if (!p[4] && (dist / secs) * 3.6 > CLEAN.maxKmh && dist > CLEAN.spikeMeters) {
       const next = pts.slice(i + 1, i + 3);
       const confirmed = next.length === 2 && next.every((q) => d(q, p) <= CLEAN.confirmMeters);
       if (!confirmed) continue;
@@ -67,14 +80,17 @@ export function cleanRoute(line) {
     kept.push(p);
   }
 
-  // 4. Standing still: one point per stop (the middle of it).
+  // 6. Standing still: one point per real stop (the middle of it); walking keeps every point.
   const out = [];
   let group = [];
   const flush = () => {
     if (!group.length) return;
-    const lat = group.reduce((t, p) => t + p[0], 0) / group.length;
-    const lng = group.reduce((t, p) => t + p[1], 0) / group.length;
-    out.push([lat, lng, group[0][2], group[group.length - 1][2]]);
+    const stayed = group[group.length - 1][2] - group[0][2] >= CLEAN.staySeconds;
+    if (stayed && group.length > 1) {
+      const lat = group.reduce((t, p) => t + p[0], 0) / group.length;
+      const lng = group.reduce((t, p) => t + p[1], 0) / group.length;
+      out.push([lat, lng, group[0][2], group[group.length - 1][2]]);
+    } else for (const p of group) out.push([p[0], p[1], p[2], p[2]]);
     group = [];
   };
   for (const p of kept) {
@@ -88,8 +104,8 @@ export function cleanRoute(line) {
   return out; // [lat, lng, firstSeconds, lastSeconds]
 }
 
-export function routeDistance(line) {
-  const pts = cleanRoute(line);
+export function routeDistance(line, extra) {
+  const pts = cleanRoute(line, extra);
   let m = 0;
   for (let i = 1; i < pts.length; i++) m += d(pts[i - 1], pts[i]);
   return Math.round(m);

@@ -6,6 +6,7 @@
 // time. A single alert is a question to ask, not proof: a shop can be next
 // door, a phone can lose signal. A pattern over several days is what matters.
 import { distanceMeters, OUTCOMES } from "./rules.js";
+import { routeDistance } from "./distance.js";
 
 // The numbers behind each alert. Change them here.
 export const WATCH = {
@@ -40,15 +41,9 @@ const metres = (a, b) => distanceMeters([a[0], a[1]], [b[0], b[1]]);
 const span = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${m % 60 ? (m % 60) + " min" : ""}`.trim() : `${m} min`);
 const km = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
 
-// Distance along a route, leaving out GPS jumps no vehicle could make.
-export function routeMetres(line) {
-  let m = 0;
-  for (let i = 1; i < (line || []).length; i++) {
-    const d = metres(line[i - 1], line[i]);
-    const dt = Math.max(1, line[i][2] - line[i - 1][2]);
-    if ((d / dt) * 3.6 <= 120) m += d;
-  }
-  return m;
+// Distance along a route, cleaned (see distance.js); check-ins are accurate extra points.
+export function routeMetres(line, extra) {
+  return routeDistance(line, extra);
 }
 
 // Places a person stayed a long time: [{ lat, lng, from, to }] in seconds.
@@ -109,7 +104,7 @@ export function watchDay({ date, nowSec, users, visits, days = {}, tracks = {}, 
     const line = (tracks[u.email] || []).slice().sort((a, b) => a[2] - b[2]);
     const name = first(u);
     const orders = mine.filter((v) => v.outcome === "order" && !v.cancelled);
-    const metresGone = routeMetres(line);
+    const metresGone = line.length ? routeMetres(line, mine.map((v) => [v.lat, v.lng, secOf(date, v.time)])) : 0;
     const lastVisit = mine[mine.length - 1];
     const lastFix = line.length ? line[line.length - 1][2] : 0;
     const running = !!day.start && !day.end;

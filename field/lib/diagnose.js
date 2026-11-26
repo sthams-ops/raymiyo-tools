@@ -21,13 +21,17 @@ export async function diagnose() {
       const tracks = await store.hall("field:track:" + day);
       for (const [email, line] of Object.entries(tracks)) {
         if (!Array.isArray(line)) continue;
-        console.log(`DIAG km ${day} ${email.split("@")[0]} points=${line.length} raw=${(raw(line) / 1000).toFixed(2)} new=${(routeDistance(line) / 1000).toFixed(2)}`);
+        const month = day.slice(0, 7);
+        const vs = Object.values(await store.hall("field:visits:" + month)).filter((v) => v && v.rep === email && v.date === day);
+        const extra = vs.map((v) => [v.lat, v.lng, Math.floor(Date.parse(`${v.date}T${v.time}:00+05:45`) / 1000)]);
+        console.log(`DIAG km ${day} ${email.split("@")[0]} points=${line.length} checkins=${vs.length} raw=${(raw(line) / 1000).toFixed(2)} new=${(routeDistance(line) / 1000).toFixed(2)} withCheckins=${(routeDistance(line, extra) / 1000).toFixed(2)}`);
       }
     }
     const t = await store.hall("field:track:2026-11-25");
     for (const [email, line] of Object.entries(t)) {
       if (!email.startsWith("sajina") || !Array.isArray(line)) continue;
-      for (let i = 0; i < line.length; i += 60) console.log(`DIAG pts ${i} ${JSON.stringify(line.slice(i, i + 60))}`);
+      const vs = Object.values(await store.hall("field:visits:2026-11")).filter((v) => v && v.rep === email && v.date === "2026-11-25");
+      console.log(`DIAG checkins ${JSON.stringify(vs.map((v) => [v.lat, v.lng, v.time, v.shopName]))}`);
     }
     const r = await checkCancellations({ force: true });
     const m = nepal().month;

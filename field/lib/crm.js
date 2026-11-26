@@ -22,12 +22,12 @@ export const crmEnabled = () => !!target();
 
 const appUrl = () => (process.env.FIELD_APP_URL || "").replace(/\/$/, "");
 
-async function send(body) {
+async function send(body, waitMs = 9000) {
   const t = target();
   if (!t) return { status: "off" };
   const q = new URLSearchParams({ auth_type: "apikey", zapikey: t.key, payload: JSON.stringify(body) });
   try {
-    const resp = await fetch(`${t.url}?${q}`, { method: "POST", signal: AbortSignal.timeout(9000) });
+    const resp = await fetch(`${t.url}?${q}`, { method: "POST", signal: AbortSignal.timeout(waitMs) });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || data.code !== "success") return { status: "error", detail: data.message || `Zoho answered ${resp.status}` };
     // The function answers with JSON text in details.output: the CRM ids, or an error.
@@ -140,6 +140,15 @@ export async function fetchBalances(soIds) {
 // null when CRM could not be asked (the function is an older copy, or Zoho is down).
 export async function fetchOrderStatuses(soIds) {
   if (!soIds.length) return {};
-  const r = await send({ action: "statuses", so_ids: soIds.join(",") });
-  return r.status === "ok" && r.out.statuses && typeof r.out.statuses === "object" ? r.out.statuses : null;
+  // CRM looks each order up one by one, so ask 5 at a time and give it time to answer.
+  const all = {};
+  for (let i = 0; i < soIds.length; i += 5) {
+    const r = await send({ action: "statuses", so_ids: soIds.slice(i, i + 5).join(",") }, 30000);
+    if (r.status !== "ok" || !r.out.statuses || typeof r.out.statuses !== "object") {
+      console.error("Order status check: CRM did not answer:", r.detail || JSON.stringify(r.out || {}).slice(0, 200));
+      return null;
+    }
+    Object.assign(all, r.out.statuses);
+  }
+  return all;
 }

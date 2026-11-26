@@ -1,6 +1,6 @@
 // Live tracking from the Android app: the route each person travels between
 // "Start day" and "End day". Nothing is saved outside those hours.
-//   field:track:DATE         one entry per person: [[lat, lng, seconds], ...]
+//   field:track:DATE         one entry per person: [[lat, lng, seconds, accuracy metres], ...]
 //   field:tracktoken:TOKEN   lets the phone send points while the app is in the background
 import { store } from "./store.js";
 import { nepal } from "./time.js";
@@ -65,7 +65,7 @@ export async function addPoints(email, points) {
       if (moved < MIN_METERS && p.t - last[2] < MIN_SECONDS) continue;
     }
     if (line.length >= MAX_POINTS) break;
-    line.push([round5(p.lat), round5(p.lng), p.t]);
+    line.push([round5(p.lat), round5(p.lng), p.t, Math.round(p.acc)]);
     saved += 1;
   }
   if (saved) await store.hset(key, email, line);

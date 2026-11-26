@@ -6,7 +6,7 @@ import { api } from "./api.js";
 import MapView from "./MapView.jsx";
 import { chatTarget, openChat } from "./Chat.jsx";
 import { Avatar, Board, VisitRow, VisitFacts, FocusList, fmtDay, PERIODS } from "./ui.jsx";
-import { buildMapData, indexBy, weekStartOf, dayBefore, routeStats } from "./mapdata.js";
+import { buildMapData, indexBy, weekStartOf, dayBefore, routeStats, checkins } from "./mapdata.js";
 import { toRows, downloadCsv, downloadPdf } from "./export.js";
 import { COLORS, OUTCOMES, ROLES, money, scoreboard, focusList, coach, shopOwes, daysBetween } from "../shared/rules.js";
 
@@ -166,9 +166,10 @@ function Live(ctx) {
   const focus = person !== "all" ? users[person] : null;
   const travel = useMemo(() => {
     if (!focus) return null;
-    const lines = data.from === data.to ? [(data.tracks || {})[person]] : Object.values(data.trackDays || {}).map((set) => set[person]);
-    return routeStats(lines.filter(Boolean));
-  }, [focus, person, data.tracks, data.trackDays, data.from, data.to]);
+    const days = data.from === data.to ? [[data.from, (data.tracks || {})[person]]] : Object.entries(data.trackDays || {}).map(([d, set]) => [d, set[person]]);
+    const used = days.filter(([, line]) => line);
+    return routeStats(used.map(([, line]) => line), used.map(([d]) => checkins(visits, person, d)));
+  }, [focus, person, data.tracks, data.trackDays, data.from, data.to, visits]);
   const noRoutes = data.from !== data.to && !data.trackDays;
   const pick = (email) => {
     setPerson(person === email ? "all" : email);
