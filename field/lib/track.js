@@ -2,10 +2,14 @@
 // "Start day" and "End day". Nothing is saved outside those hours.
 //   field:track:DATE         one entry per person: [[lat, lng, seconds, accuracy metres], ...]
 //   field:tracktoken:TOKEN   lets the phone send points while the app is in the background
+//   field:here               owner only: each field user's latest position, any time
+//                            the phone is signed in. One point per person, no history,
+//                            never used for routes, distance or reports.
 import { store } from "./store.js";
 import { nepal } from "./time.js";
 import { rid } from "./auth.js";
 import { distanceMeters } from "../shared/rules.js";
+import { loadSettings } from "./data.js";
 
 const TOKEN_SECONDS = 60 * 60 * 24 * 30;
 const MAX_POINTS = 3000; // per person per day
@@ -34,7 +38,9 @@ export async function addPoints(email, points) {
   const { date } = nepal(now);
   const dayKey = "field:day:" + date;
   const day = await store.hget(dayKey, email);
-  if (!day || !day.start || day.end) return { tracking: false, saved: 0 };
+  const working = !!(day && day.start && !day.end);
+  const always = (await loadSettings()).alwaysLive;
+  if (!working && !always) return { tracking: false, saved: 0 };
 
   const nowSec = Math.floor(now.getTime() / 1000);
   const fresh = (Array.isArray(points) ? points : [])
@@ -44,6 +50,12 @@ export async function addPoints(email, points) {
     .filter((p) => Number.isFinite(p.t) && p.t <= nowSec + 120 && nepal(new Date(p.t * 1000)).date === date)
     .filter((p) => p.acc <= MAX_ACCURACY)
     .sort((a, b) => a.t - b.t);
+  // Latest position for the owner's map, kept whether or not the day has started.
+  const latest = fresh.filter((p) => !p.mock).pop();
+  if (latest) await store.hset("field:here", email, { lat: latest.lat, lng: latest.lng, t: latest.t, acc: Math.round(latest.acc), at: nepal(new Date(latest.t * 1000)).time, date: nepal(new Date(latest.t * 1000)).date });
+  // Day not started (or ended): nothing else is saved.
+  if (!working) return { tracking: true, saved: 0, liveOnly: true };
+
   // Points from a fake-GPS app are counted for the office and never drawn as the route.
   const mocked = fresh.filter((p) => p.mock);
   if (mocked.length) {

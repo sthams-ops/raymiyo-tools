@@ -95,6 +95,7 @@ export default async function handler(req, res) {
 
     if (b.op === "saveSettings") {
       const settings = normalizeSettings(b.settings);
+      if (me.email !== OWNER) settings.alwaysLive = normalizeSettings(await store.get("field:settings")).alwaysLive;
       await store.set("field:settings", settings);
       return res.json({ settings });
     }

@@ -40,6 +40,7 @@ export const DEFAULT_SETTINGS = {
   // A field user sees none unless listed here as "own" (their own route) or "team" (everyone's).
   routeAccess: {},
   tvRoutes: false, // draw routes on the office TV
+  alwaysLive: true, // owner sees field phones' live position even before Start day (nothing recorded)
 };
 
 export function normalizeSettings(saved) {
@@ -62,6 +63,7 @@ export function normalizeSettings(saved) {
   return {
     routeAccess,
     tvRoutes: s.tvRoutes === true,
+    alwaysLive: s.alwaysLive !== false,
     dailyVisits: whole(s.dailyVisits, 1, 100, DEFAULT_SETTINGS.dailyVisits),
     reorderDays: whole(s.reorderDays, 3, 120, DEFAULT_SETTINGS.reorderDays),
     maxMargin: whole(s.maxMargin, 0, 90, DEFAULT_SETTINGS.maxMargin),

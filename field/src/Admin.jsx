@@ -155,13 +155,23 @@ function Live(ctx) {
   const [period, setPeriod] = useState("today");
   const isToday = data.from === data.today && data.to === data.today;
   const mapData = useMemo(() => {
-    const days = isToday ? Object.fromEntries(Object.entries(data.days).filter(([e]) => person === "all" || e === person)) : {};
+    // Owner only: phones seen before Start day or after End day show where they are now.
+    const merged = { ...data.days };
+    for (const [email, h] of Object.entries(data.here || {})) {
+      const d = merged[email] || {};
+      const running = d.start && !d.end;
+      const newer = !d.at || h.date !== data.today || h.at > d.at;
+      if (running && !newer) continue;
+      const note = running ? "" : d.end ? "after End day" : h.date === data.today ? "day not started" : "last seen " + fmtDay(h.date);
+      merged[email] = { ...d, lat: h.lat, lng: h.lng, at: h.at, note };
+    }
+    const days = isToday ? Object.fromEntries(Object.entries(merged).filter(([e]) => person === "all" || e === person)) : {};
     const shopList = data.shops.filter((s) => person === "all" || s.owner === person);
     const mine = (set) => Object.fromEntries(Object.entries(set || {}).filter(([e]) => person === "all" || e === person));
     const tracks = data.from === data.to ? mine(data.tracks) : {};
     const trackDays = data.from !== data.to && data.trackDays ? Object.fromEntries(Object.entries(data.trackDays).map(([d, set]) => [d, mine(set)])) : null;
     return buildMapData({ visits, shops: shopList, users: data.users, days, tracks, trackDays });
-  }, [visits, data.shops, data.users, data.days, data.tracks, data.trackDays, data.from, data.to, person, isToday]);
+  }, [visits, data.shops, data.users, data.days, data.here, data.today, data.tracks, data.trackDays, data.from, data.to, person, isToday]);
   // One person chosen: what their route says about the day.
   const focus = person !== "all" ? users[person] : null;
   const travel = useMemo(() => {
@@ -803,6 +813,7 @@ function SettingsTab({ data, canEdit, reload, say }) {
   const [maxMargin, setMaxMargin] = useState(data.settings.maxMargin);
   const [routeAccess, setRouteAccess] = useState(data.settings.routeAccess || {});
   const [tvRoutes, setTvRoutes] = useState(!!data.settings.tvRoutes);
+  const [alwaysLive, setAlwaysLive] = useState(data.settings.alwaysLive !== false);
   const [busy, setBusy] = useState(false);
   async function refreshProducts() {
     setBusy(true);
@@ -827,6 +838,7 @@ function SettingsTab({ data, canEdit, reload, say }) {
     setMaxMargin(data.settings.maxMargin);
     setRouteAccess(data.settings.routeAccess || {});
     setTvRoutes(!!data.settings.tvRoutes);
+    setAlwaysLive(data.settings.alwaysLive !== false);
   }, [data.settings]);
 
   async function save(e) {
@@ -834,7 +846,7 @@ function SettingsTab({ data, canEdit, reload, say }) {
     setBusy(true);
     setErr("");
     try {
-      await api.admin("saveSettings", { settings: { points, farMeters: far, dailyVisits: daily, reorderDays: reorder, maxMargin, routeAccess, tvRoutes, brands: brands.split(",").map((b) => b.trim()).filter(Boolean) } });
+      await api.admin("saveSettings", { settings: { points, farMeters: far, dailyVisits: daily, reorderDays: reorder, maxMargin, routeAccess, tvRoutes, alwaysLive, brands: brands.split(",").map((b) => b.trim()).filter(Boolean) } });
       await reload();
       say("Settings saved. Leaderboards now use the new rules.");
     } catch (e2) {
@@ -902,6 +914,12 @@ function SettingsTab({ data, canEdit, reload, say }) {
             <input type="checkbox" checked={tvRoutes} disabled={!canEdit} onChange={(e) => setTvRoutes(e.target.checked)} />
             <span>Draw travel routes on the office TV</span>
           </label>
+          {data.me.email === data.owner && (
+            <label className="check">
+              <input type="checkbox" checked={alwaysLive} onChange={(e) => setAlwaysLive(e.target.checked)} />
+              <span>Show me where field phones are all the time, also before Start day (only you see this; nothing is recorded until Start day)</span>
+            </label>
+          )}
           <h2>Orders</h2>
           <label className="field">
             Highest margin a field user can give a shop, in %

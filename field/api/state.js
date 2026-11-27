@@ -11,6 +11,11 @@ import { loadTracks } from "../lib/track.js";
 import { loadProducts } from "../lib/products.js";
 import { settle } from "../lib/sync.js";
 
+async function hereNow(users) {
+  const all = await store.hall("field:here");
+  return Object.fromEntries(Object.entries(all).filter(([email]) => users[email] && users[email].role === "rep" && users[email].active !== false));
+}
+
 export default async function handler(req, res) {
   try {
     checkCancellationsSoon(); // orders cancelled in CRM drop off the totals (at most every 10 minutes)
@@ -83,6 +88,8 @@ export default async function handler(req, res) {
       routes,
       board,
       owner: OWNER,
+      // Owner only: where each field user's phone is right now, even before Start day.
+      here: me.email === OWNER && settings.alwaysLive ? await hereNow(users) : {},
       domain: DOMAIN,
       features: {
         crm: crmEnabled(),

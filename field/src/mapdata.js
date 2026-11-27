@@ -74,7 +74,7 @@ export function buildMapData({ visits, shops, users, days, tracks, trackDays, sh
       lng: d.lng,
       color: people[email].color,
       initial: firstName(people[email])[0],
-      label: `${firstName(people[email])} ${d.at}${d.end ? " · day ended" : ""}`,
+      label: `${firstName(people[email])} ${d.at}${d.note ? " · " + d.note : d.end ? " · day ended" : ""}`,
     }));
   // Routes travelled (Android app live tracking), one coloured line per person.
   const sets = trackDays ? Object.entries(trackDays) : [["", tracks || {}]];

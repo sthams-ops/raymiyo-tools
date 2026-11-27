@@ -1,7 +1,8 @@
 // Live tracking. Only does anything inside the Android app (not in a browser,
-// not on iPhone home-screen installs). While the day is started, the phone
-// reports its position as the person moves, even with the screen off, and
-// stops at End day. Android shows a permanent notification while this runs.
+// not on iPhone home-screen installs). While signed in, the phone reports its
+// position as the person moves, even with the screen off. Between Start day and
+// End day that is the recorded route; outside it the server keeps only the latest
+// position for the owner. Android shows a permanent notification while this runs.
 import { Capacitor, CapacitorHttp, registerPlugin } from "@capacitor/core";
 import { api } from "./api.js";
 
@@ -89,7 +90,7 @@ export async function startTracking(report) {
     watcherId = await Geo.addWatcher(
       {
         backgroundTitle: "Raymiyo Field is on",
-        backgroundMessage: "Sharing your location with the office until you tap End day.",
+        backgroundMessage: "Your location is shared with the office while you are signed in.",
         requestPermissions: true,
         stale: false,
         distanceFilter: 25,

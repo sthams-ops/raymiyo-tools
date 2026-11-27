@@ -7,7 +7,7 @@ import { getPosition, shrinkPhoto } from "./geo.js";
 import MapView from "./MapView.jsx";
 import { Board, VisitRow, VisitFacts, FocusList, firstName, PERIODS } from "./ui.jsx";
 import { buildMapData, indexBy } from "./mapdata.js";
-import { isAndroidApp, startTracking, stopTracking } from "./tracking.js";
+import { isAndroidApp, startTracking } from "./tracking.js";
 import { CONTACT_ROLES, OUTCOMES, distanceMeters, visitPoints, focusList, findDuplicate, phoneKey, orderTotals, shopOwes, money } from "../shared/rules.js";
 
 const fmtDist = (m) => (m < 1000 ? m + " m" : (m / 1000).toFixed(1) + " km");
@@ -28,11 +28,13 @@ export default function Rep({ data, reload, say, waiting = [] }) {
   const [shopQ, setShopQ] = useState("");
   const [tab, setTab] = useState("today"); // phones show one of three screens; wide screens show all
 
-  // Android app only: share location all the time between Start day and End day.
+  // Android app only: location is shared while signed in. The server decides what
+  // happens to it: before Start day / after End day only the latest position is kept
+  // (for the owner); between Start day and End day it is the recorded route. If the
+  // owner switches all-day sharing off, the server tells the phone to stop until Start day.
   useEffect(() => {
     if (!isAndroidApp()) return;
-    if (started) startTracking((text) => setErr(text));
-    else stopTracking();
+    startTracking((text) => setErr(text));
   }, [started]);
 
   const users = useMemo(() => indexBy(data.users, "email"), [data.users]);

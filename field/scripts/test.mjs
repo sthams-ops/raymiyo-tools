@@ -214,7 +214,18 @@ ok((await call("state", { as: "divash" })).code === 401, "switched-off person is
   await store.hdel("field:day:" + nepal().date, EMAIL.sajina);
   await store.hdel("field:track:" + nepal().date, EMAIL.sajina);
   let t = await call("track", { method: "POST", bearer: tok, body: { points: [pt(27.7, 85.3, 5)] } });
-  ok(t.code === 200 && t.data.tracking === false && t.data.saved === 0, "nothing is tracked before Start day");
+  ok(t.code === 200 && t.data.saved === 0 && t.data.liveOnly === true && !(await store.hget("field:track:" + nepal().date, EMAIL.sajina)), "before Start day: no route is recorded");
+  ok((await store.hget("field:here", EMAIL.sajina)).lat === 27.7, "before Start day: only the latest position is kept");
+  let seen = await call("state", { as: "mijesh" });
+  ok(seen.data.here[EMAIL.sajina] && seen.data.here[EMAIL.sajina].lat === 27.7, "the owner sees where the phone is before Start day");
+  seen = await call("state", { as: "bivek" });
+  ok(Object.keys(seen.data.here || {}).length === 0, "the view-only partner does not");
+  seen = await call("state", { as: "sajina" });
+  ok(Object.keys(seen.data.here || {}).length === 0, "field users do not");
+  await store.set("field:settings", { ...(await store.get("field:settings")), alwaysLive: false });
+  t = await call("track", { method: "POST", bearer: tok, body: { points: [pt(27.7, 85.3, 4)] } });
+  ok(t.data.tracking === false, "with all-day sharing off, the phone is told to stop until Start day");
+  await store.set("field:settings", { ...(await store.get("field:settings")), alwaysLive: true });
   await call("day", { as: "sajina", method: "POST", body: { action: "start", lat: 27.7, lng: 85.3 } });
   t = await call("track", { method: "POST", bearer: tok, body: { points: [pt(27.7, 85.3, 30), pt(27.70001, 85.3, 20), pt(27.705, 85.31, 10), pt(27.71, 85.32, 5, 900), pt(999, 0, 1)] } });
   ok(t.data.tracking === true && t.data.saved === 2, "tracking keeps real movement and drops jitter, bad fixes and bad numbers");
@@ -225,7 +236,8 @@ ok((await call("state", { as: "divash" })).code === 401, "switched-off person is
   ok(Object.keys(st.data.tracks).length === 0, "a field user is not sent any travel route unless it is granted");
   await call("day", { as: "sajina", method: "POST", body: { action: "end", lat: 27.7, lng: 85.3 } });
   t = await call("track", { method: "POST", bearer: tok, body: { points: [pt(27.8, 85.4, 1)] } });
-  ok(t.data.tracking === false && (await store.hget("field:track:" + nepal().date, EMAIL.sajina)).length === 2, "tracking stops at End day");
+  ok(t.data.liveOnly === true && (await store.hget("field:track:" + nepal().date, EMAIL.sajina)).length === 2, "after End day: no more route, only the latest position");
+  ok((await store.hget("field:here", EMAIL.sajina)).lat === 27.8, "after End day the owner still sees where the phone is");
 }
 
 // photos and TV
